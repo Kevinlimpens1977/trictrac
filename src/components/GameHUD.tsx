@@ -6,11 +6,10 @@ import { DiceRoller } from './DiceRoller';
 interface GameHUDProps {
   state: GameState;
   onRollDice: () => void;
-  onSelectSet?: (index: number) => void;
   onUndo: (stepsBack: number) => void;
 }
 
-export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onSelectSet, onUndo }) => {
+export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo }) => {
   const isBlack = state.turn === 'B';
   const turnName = isBlack ? 'Zwart' : 'Wit';
   const turnColor = isBlack ? '#1a1a1a' : '#f5f0e8';

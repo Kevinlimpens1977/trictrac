@@ -3,8 +3,8 @@ import { MenuScreen } from './components/MenuScreen';
 import { GameBoard } from './components/GameBoard';
 import { GameHUD } from './components/GameHUD';
 import { GameOverScreen } from './components/GameOverScreen';
-import { FloatingDice } from './components/FloatingDice';
-import { DiceRoller } from './components/DiceRoller';
+import { AuthScreen } from './components/AuthScreen';
+import type { User } from 'firebase/auth';
 import { gameReducer, createInitialState } from './engine/gameReducer';
 import { startAILoop } from './engine/aiEngine';
 import { getBarCount, getEntryPoint, canLandOn, canBearOff, getValidMoves } from './engine/moveEngine';
@@ -13,6 +13,7 @@ import type { GameMode, Player } from './types/GameState';
 import './App.css';
 
 function App() {
+  const [user, setUser] = useState<User | null>(null);
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialState);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -131,9 +132,6 @@ function App() {
     dispatch({ type: 'ROLL_DICE' });
   }, []);
 
-  const handleSelectSet = useCallback((index: number) => {
-    dispatch({ type: 'SELECT_DICE_SET', index });
-  }, []);
 
   const handlePointClick = useCallback((point: number) => {
     const s = stateRef.current;
@@ -207,6 +205,10 @@ function App() {
   }, [state.screen]);
 
   /* ─── Render ─── */
+  if (!user) {
+    return <AuthScreen onAuthenticated={(user) => setUser(user)} />;
+  }
+
   if (state.screen === 'menu') {
     return <MenuScreen onStart={handleStart} />;
   }
@@ -256,7 +258,6 @@ function App() {
               <GameHUD
                 state={state}
                 onRollDice={handleRollDice}
-                onSelectSet={handleSelectSet}
                 onUndo={(stepsBack) => dispatch({ type: 'UNDO', stepsBack })}
               />
             </div>
