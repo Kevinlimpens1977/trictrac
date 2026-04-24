@@ -1,0 +1,51 @@
+/* App-level styles */
+
+@keyframes popIn {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.piece-enter {
+  animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+@keyframes floatAway {
+  0% { transform: translateY(0) scale(1); opacity: 1; filter: drop-shadow(0 0 0px rgba(255, 215, 0, 0)); }
+  30% { transform: translateY(-20px) scale(1.2); opacity: 1; filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.8)); }
+  100% { transform: translateY(-100px) scale(0); opacity: 0; filter: drop-shadow(0 0 30px rgba(255, 215, 0, 1)); }
+}
+
+.animate-piece-exit {
+  animation: floatAway 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.climax-piece {
+  filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
+}
+
+@keyframes epicWin {
+  0% { transform: translate(-50%, -50%) scale(0.5) rotate(0deg); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.5) rotate(720deg); opacity: 1; }
+}
+
+@keyframes pieceExplode {
+  0% { transform: translate(-50%, -50%) scale(2.5); opacity: 1; filter: brightness(1); }
+  50% { transform: translate(-50%, -50%) scale(4); opacity: 1; filter: brightness(2); }
+  100% { transform: translate(-50%, -50%) scale(10); opacity: 0; filter: brightness(3); }
+}
+
+@keyframes pulseButton {
+  0% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7); }
+  70% { box-shadow: 0 0 0 20px rgba(212, 175, 55, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
+}
+
+@keyframes dawnGlow {
+  0% { background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%); }
+  100% { background: radial-gradient(ellipse at center, #2d2412 0%, #0a0a0f 100%); }
+}
