@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, onAuthStateChanged } from 'firebase/auth';
+import { isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 
@@ -75,6 +75,21 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
       });
   };
 
+  const handleGoogleLogin = () => {
+    setLoading(true);
+    setStatus('');
+    const provider = new GoogleAuthProvider();
+    signInWithPopup(auth, provider)
+      .then((result) => {
+        onAuthenticated(result.user);
+      })
+      .catch((error) => {
+        console.error('Error signing in with Google', error);
+        setStatus('Er is een fout opgetreden bij het inloggen met Google.');
+        setLoading(false);
+      });
+  };
+
   if (loading) {
     return (
       <div style={styles.container}>
@@ -106,6 +121,19 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
             {loading ? 'Versturen...' : 'Stuur inloglink'}
           </button>
         </form>
+
+        <div style={styles.divider}>
+          <span style={styles.dividerText}>of</span>
+        </div>
+
+        <button onClick={handleGoogleLogin} disabled={loading} style={styles.googleButton}>
+          <img 
+            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
+            alt="Google logo" 
+            style={styles.googleIcon} 
+          />
+          Inloggen met Google
+        </button>
 
         {status && <p style={styles.status}>{status}</p>}
       </div>
@@ -169,6 +197,36 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '16px',
     cursor: 'pointer',
     transition: 'transform 0.2s',
+  },
+  divider: {
+    display: 'flex',
+    alignItems: 'center',
+    margin: '24px 0',
+    color: 'rgba(255, 255, 255, 0.3)',
+  },
+  dividerText: {
+    padding: '0 16px',
+    fontSize: '14px',
+  },
+  googleButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '12px',
+    width: '100%',
+    padding: '12px 16px',
+    borderRadius: '8px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    background: 'white',
+    color: '#333',
+    fontWeight: 'bold',
+    fontSize: '16px',
+    cursor: 'pointer',
+    transition: 'background 0.2s',
+  },
+  googleIcon: {
+    width: '18px',
+    height: '18px',
   },
   status: {
     marginTop: '24px',
