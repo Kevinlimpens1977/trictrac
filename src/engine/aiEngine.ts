@@ -52,14 +52,11 @@ export function getNextAIAction(state: GameState): GameAction | null {
 
     // If on bar, handle bar entry
     if (getBarCount(state, player) > 0) {
-      if (state.validTos.length > 0) {
-        // Bar entry point is shown as valid
-        const entryPt = getEntryPoint(player, state.remainingDice[0]);
-        if (canLandOn(state, entryPt, player)) {
-          return { type: 'MOVE_PIECE', from: 0, to: entryPt };
-        }
+      const entryPt = getEntryPoint(player, state.remainingDice[0]);
+      if (canLandOn(state, entryPt, player)) {
+        return { type: 'MOVE_PIECE', from: 0, to: entryPt };
       }
-      return null; // Bar is blocked, should have been forfeited
+      return { type: 'FORFEIT_TURN', reason: 'Bar is geblokkeerd!' };
     }
 
     // Normal moves: find first piece with valid move (lowest index)

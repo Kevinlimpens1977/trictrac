@@ -19,19 +19,36 @@ export const IMG_W = 976;
 export const IMG_H = 509;
 
 /** Triangle vertical boundaries */
-export const BOTTOM_BASE = 423;
-export const BOTTOM_TIP = 255;
-export const TOP_BASE = 70;
-export const TOP_TIP = 238;
+export const BOTTOM_BASE = 415;
+export const BOTTOM_TIP = 264;
+export const TOP_BASE = 78; // Moved up to match the green line
+export const TOP_TIP = 245;
 
 /** Piece dimensions: 5 pieces span base→tip = (423-255) = 168, radius = 16.8 -> 17 */
 export const PIECE_RADIUS = 16;
 export const PIECE_DIAMETER = PIECE_RADIUS * 2;
 
-/** Left field triangle centers (left to right) — exact pixel centers */
-const LF = [154, 211.4, 268.7, 326, 383.4, 440.7];
-/** Right field triangle centers (left to right) — exact pixel centers */
-const RF = [535.3, 592.6, 650, 707.3, 764.7, 822];
+/** Helper to calculate 6 exact centers between startX and endX */
+const centers = (startX: number, endX: number, count = 6) => {
+  const width = (endX - startX) / count;
+  return Array.from({ length: count }, (_, i) => startX + width / 2 + i * width);
+};
+
+/** Left field: x 85 to 328 (calculated visually for perfect centering) */
+const LF = centers(85, 328);
+
+/** Right field: x 372 to 615 originally, but physical rightmost 4 triangles are painted narrower. 
+ *  We use 40.5 step for the first two, and 38.5 step (-2px) for the remaining four.
+ */
+const startRF = 372 + (243 / 6) / 2; // 392.25
+const RF = [
+  startRF,
+  startRF + 40.5,
+  startRF + 40.5 + 38.5,
+  startRF + 40.5 + 38.5 * 2,
+  startRF + 40.5 + 38.5 * 3,
+  startRF + 40.5 + 38.5 * 4,
+];
 
 export const BOARD_LAYOUT: BoardLayout = {
   aspectRatio: IMG_W / IMG_H,
@@ -71,23 +88,23 @@ export const BOARD_LAYOUT: BoardLayout = {
   ],
 
   bar: {
-    x: 353,
-    y: 254,
-    w: 34,
-    h: 360,
+    x: 344,
+    y: 254.5,
+    w: 12, // 356 - 344 = 12
+    h: 353,
   },
 
   trayLeft: {
-    x: 40,
-    y: 254,
-    w: 40,
+    x: 28,
+    y: 254.5,
+    w: 56, // 0 to 57 approx
     h: 509,
   },
 
   trayRight: {
-    x: 640,
-    y: 254,
-    w: 40,
+    x: 774, // Center of 643 to 905
+    y: 254.5,
+    w: 262, // 905 - 643 = 262
     h: 509,
   },
 };

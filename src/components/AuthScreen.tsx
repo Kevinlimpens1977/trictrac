@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail, onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import React, { useEffect, useState } from 'react';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 
@@ -8,12 +8,10 @@ interface AuthScreenProps {
 }
 
 export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
-  const [email, setEmail] = useState('');
   const [status, setStatus] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         onAuthenticated(user);
@@ -23,57 +21,6 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
 
     return () => unsubscribe();
   }, [onAuthenticated]);
-
-  useEffect(() => {
-    // Handle the sign-in link
-    if (isSignInWithEmailLink(auth, window.location.href)) {
-      let emailForSignIn = window.localStorage.getItem('emailForSignIn');
-      
-      if (!emailForSignIn) {
-        // Prompt user for email if missing from localStorage
-        emailForSignIn = window.prompt('Bevestig alstublieft je e-mailadres voor verificatie:');
-      }
-
-      if (emailForSignIn) {
-        setLoading(true);
-        signInWithEmailLink(auth, emailForSignIn, window.location.href)
-          .then((result) => {
-            window.localStorage.removeItem('emailForSignIn');
-            onAuthenticated(result.user);
-          })
-          .catch((error) => {
-            console.error('Error signing in with email link', error);
-            setStatus('Er is een fout opgetreden bij het inloggen. De link is mogelijk verlopen.');
-            setLoading(false);
-          });
-      }
-    }
-  }, [onAuthenticated]);
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setStatus('');
-
-    const actionCodeSettings = {
-      // URL you want to redirect back to. The domain (www.example.com) for this
-      // URL must be in the authorized domains list in the Firebase Console.
-      url: window.location.origin, // Dynamically use the current origin
-      handleCodeInApp: true,
-    };
-
-    sendSignInLinkToEmail(auth, email, actionCodeSettings)
-      .then(() => {
-        window.localStorage.setItem('emailForSignIn', email);
-        setStatus('Inloglink verstuurd! Controleer je e-mail (ook je spamfolder). Je kunt dit tabblad sluiten.');
-        setLoading(false);
-      })
-      .catch((error) => {
-        console.error('Error sending email link', error);
-        setStatus('Er ging iets mis bij het versturen van de link. Probeer het later opnieuw.');
-        setLoading(false);
-      });
-  };
 
   const handleGoogleLogin = () => {
     setLoading(true);
@@ -94,7 +41,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
     return (
       <div style={styles.container}>
         <div style={styles.card}>
-          <h1 style={styles.title}>Laden...</h1>
+          <h1 style={styles.loadingText}>Laden...</h1>
         </div>
       </div>
     );
@@ -102,40 +49,20 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
 
   return (
     <div style={styles.container}>
+      {/* Het 'patch' kader om de oude elementen af te dekken */}
       <div style={styles.card}>
-        <h1 style={styles.title}>Inloggen met E-mail</h1>
-        <p style={styles.subtitle}>
-          Vul je e-mailadres in en we sturen je een magische link om direct in te loggen zonder wachtwoord.
-        </p>
-
-        <form onSubmit={handleLogin} style={styles.form}>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Je e-mailadres"
-            required
-            style={styles.input}
-          />
-          <button type="submit" disabled={loading} style={styles.button}>
-            {loading ? 'Versturen...' : 'Stuur inloglink'}
-          </button>
-        </form>
-
-        <div style={styles.divider}>
-          <span style={styles.dividerText}>of</span>
-        </div>
-
-        <button onClick={handleGoogleLogin} disabled={loading} style={styles.googleButton}>
+        <h2 style={styles.title}>Spelen als</h2>
+        
+        <button onClick={handleGoogleLogin} style={styles.googleButton}>
           <img 
             src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
-            alt="Google logo" 
+            alt="Google" 
             style={styles.googleIcon} 
           />
-          Inloggen met Google
+          Doorgaan met Google
         </button>
 
-        {status && <p style={styles.status}>{status}</p>}
+        {status && <div style={styles.status}>{status}</div>}
       </div>
     </div>
   );
@@ -148,65 +75,41 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#0a0a0a',
+    background: 'url(/afbeeldingen/inlogscherm.png) center/cover no-repeat',
+    backgroundColor: '#0a0a0a',
     fontFamily: '"Inter", sans-serif',
   },
   card: {
-    background: 'rgba(255, 255, 255, 0.05)',
+    // Effen beige/hout kleur om de achtergrond af te dekken
+    background: '#e6ceaa',
     padding: '40px',
-    borderRadius: '16px',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    backdropFilter: 'blur(10px)',
-    maxWidth: '400px',
-    width: '90%',
+    borderRadius: '24px',
+    // Subtiele schaduw zodat het lijkt alsof het op het bord ligt
+    boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1), 0 4px 15px rgba(0,0,0,0.2)',
+    width: '470px',
+    height: '580px',
+    maxWidth: '90%',
     textAlign: 'center',
-  },
-  title: {
-    color: '#d4af37', // Gold color similar to the Tric-Trac aesthetic
-    fontSize: '24px',
-    marginBottom: '16px',
-    margin: 0,
-  },
-  subtitle: {
-    color: '#ccc',
-    fontSize: '14px',
-    marginBottom: '24px',
-    lineHeight: 1.5,
-  },
-  form: {
+    zIndex: 10,
+    // Verplaats het blok iets naar beneden over de oude inputs
+    transform: 'translateY(5vh)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
-  },
-  input: {
-    padding: '12px 16px',
-    borderRadius: '8px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(0, 0, 0, 0.5)',
-    color: 'white',
-    fontSize: '16px',
-    outline: 'none',
-  },
-  button: {
-    padding: '12px 16px',
-    borderRadius: '8px',
-    border: 'none',
-    background: 'linear-gradient(135deg, #d4af37, #aa8222)',
-    color: 'black',
-    fontWeight: 'bold',
-    fontSize: '16px',
-    cursor: 'pointer',
-    transition: 'transform 0.2s',
-  },
-  divider: {
-    display: 'flex',
     alignItems: 'center',
-    margin: '24px 0',
-    color: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    gap: '20px',
   },
-  dividerText: {
-    padding: '0 16px',
-    fontSize: '14px',
+  title: {
+    color: '#5c3a21', // Donkerbruin hout contrast
+    fontSize: '20px',
+    fontWeight: 'bold',
+    margin: 0,
+    marginBottom: '10px',
+  },
+  loadingText: {
+    color: '#5c3a21',
+    fontSize: '20px',
+    margin: 0,
   },
   googleButton: {
     display: 'flex',
@@ -214,26 +117,25 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     gap: '12px',
     width: '100%',
-    padding: '12px 16px',
-    borderRadius: '8px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'white',
+    padding: '14px 24px',
+    borderRadius: '12px',
+    border: '2px solid rgba(0,0,0,0.1)',
+    background: '#ffffff',
     color: '#333',
     fontWeight: 'bold',
-    fontSize: '16px',
+    fontSize: '18px',
     cursor: 'pointer',
-    transition: 'background 0.2s',
+    transition: 'transform 0.2s, background 0.2s',
+    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
   },
   googleIcon: {
-    width: '18px',
-    height: '18px',
+    width: '24px',
+    height: '24px',
   },
   status: {
-    marginTop: '24px',
-    color: '#d4af37',
+    marginTop: '16px',
+    color: '#d32f2f',
     fontSize: '14px',
-    background: 'rgba(212, 175, 55, 0.1)',
-    padding: '12px',
-    borderRadius: '8px',
+    fontWeight: 'bold',
   },
 };

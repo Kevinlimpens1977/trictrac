@@ -32,6 +32,8 @@ export function createInitialState(): GameState {
   return {
     screen: 'menu',
     mode: 'pvp',
+    playerNames: { B: 'Speler 1', W: 'Speler 2' },
+    gameId: null,
     points,
     barB: 0,
     barW: 0,
@@ -56,6 +58,7 @@ export function createInitialState(): GameState {
       hits: { B: 0, W: 0 },
       borneOff: { B: 0, W: 0 },
     },
+    lastUpdateId: Math.random().toString(36).substring(2, 9),
   };
 }
 
@@ -109,15 +112,55 @@ function handleEndOfActions(state: GameState): GameState {
 /* ─── Reducer ─── */
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
+  if (action.type === 'SYNC_STATE') {
+    return { ...action.state, localPlayer: state.localPlayer };
+  }
+
+  const newState = baseGameReducer(state, action);
+  if (newState !== state) {
+    newState.lastUpdateId = Math.random().toString(36).substring(2, 9);
+  }
+  return newState;
+}
+
+function baseGameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'START_GAME': {
       const s = createInitialState();
+      const pNames = action.playerNames || { B: 'Speler 1', W: 'Speler 2' };
+      const startTurn = action.starter || 'B';
       return {
         ...s,
         screen: 'game',
         mode: action.mode,
-        msg: `${playerName('B')} begint. Gooi de dobbelstenen.`,
+        playerNames: pNames,
+        gameId: action.gameId || null,
+        localPlayer: action.localPlayer,
+        turn: startTurn,
+        msg: `${pNames[startTurn]} begint. Gooi de dobbelstenen.`,
       };
+    }
+
+    case 'ABANDON_GAME': {
+      const abandoner = action.player;
+      const opponent = abandoner === 'B' ? 'W' : 'B';
+      const abandonerSetup = abandoner === 'B' ? state.setupCountB : state.setupCountW;
+      const opponentSetup = opponent === 'B' ? state.setupCountB : state.setupCountW;
+      
+      if (abandonerSetup > 12 && opponentSetup > 12) {
+        return {
+          ...state,
+          screen: 'gameover',
+          winner: opponent,
+          msg: `${playerName(abandoner)} heeft het spel verlaten. ${playerName(opponent)} wint!`,
+        };
+      } else {
+        return {
+          ...createInitialState(),
+          screen: 'menu',
+          msg: `${playerName(abandoner)} heeft het spel verlaten. Het spel is afgebroken.`,
+        };
+      }
     }
 
     case 'ROLL_DICE': {
@@ -384,8 +427,33 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...nextTurn(state), msg: action.reason };
     }
 
+    case 'ABANDON_GAME': {
+      const abandoner = action.player;
+      const winner = abandoner === 'B' ? 'W' : 'B';
+      const hasStarted = state.setupCountB > 12 && state.setupCountW > 12;
+
+      if (hasStarted) {
+        return {
+          ...state,
+          winner,
+          screen: 'gameover',
+          msg: `${playerName(abandoner)} heeft het spel verlaten. ${playerName(winner)} wint!`,
+        };
+      } else {
+        return {
+          ...createInitialState(),
+          screen: 'menu', // or keep it simple
+          msg: 'Spel afgebroken. Er waren niet genoeg stenen geplaatst.',
+        };
+      }
+    }
+
     case 'RESET': {
       return createInitialState();
+    }
+
+    case 'GO_TO_GAMEROOM': {
+      return { ...state, screen: 'gameroom' };
     }
 
     case 'DEV_SETUP_COMPLETE': {

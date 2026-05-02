@@ -10,9 +10,10 @@ type HelpState = 'closed' | 'opening' | 'content' | 'closing-text' | 'closing';
 
 interface MenuScreenProps {
   onStart: (mode: 'pvp' | 'pva') => void;
+  onLogout?: () => void;
 }
 
-export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart }) => {
+export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => {
   const [loaded, setLoaded] = useState(false);
   const [helpState, setHelpState] = useState<HelpState>('closed');
   const video1Ref = useRef<HTMLVideoElement>(null);
@@ -186,6 +187,25 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart }) => {
           transform: translateX(-50%) scale(0.96) translateY(0.4vh);
         }
 
+        /* LOGOUT BUTTON */
+        .logout-btn {
+          top: 4%;
+          right: 4%;
+          font-size: 2vh;
+          padding: 1vh 2vh;
+          border-radius: 1.5vh;
+          background: linear-gradient(180deg, #ff8c8c 0%, #e63939 100%);
+          border-color: #8b0000;
+          box-shadow: 0 0.6vh 0 #8b0000, 0 0.8vh 1.5vh rgba(0,0,0,0.5);
+        }
+        .logout-btn:hover {
+          background: linear-gradient(180deg, #ff9999 0%, #ff4d4d 100%);
+          box-shadow: 0 0.6vh 0 #8b0000, 0 1vh 2vh rgba(0,0,0,0.6);
+        }
+        .logout-btn:active {
+          box-shadow: 0 0.2vh 0 #8b0000, 0 0.4vh 1vh rgba(0,0,0,0.4);
+        }
+
         /* HELP VIDEOS */
         .helpVideo {
           position: absolute;
@@ -335,6 +355,12 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart }) => {
           <button className="btn-supercell speluitleg-btn" onClick={handleOpenHelp}>
             Speluitleg
           </button>
+
+          {onLogout && (
+            <button className="btn-supercell logout-btn" onClick={onLogout}>
+              Uitloggen
+            </button>
+          )}
         </div>
 
         {/* HELP TEXT PANEL */}

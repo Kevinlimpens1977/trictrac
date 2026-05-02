@@ -1,7 +1,7 @@
 /* ─── Core Game State Types ─── */
 
 export type Player = 'B' | 'W';
-export type Screen = 'menu' | 'game' | 'gameover';
+export type Screen = 'menu' | 'gameroom' | 'game' | 'gameover';
 export type Phase = 'setup' | 'move';
 export type GameMode = 'pvp' | 'pva';
 
@@ -14,6 +14,10 @@ export interface PointState {
 export interface GameState {
   screen: Screen;
   mode: GameMode;
+  
+  playerNames: { B: string; W: string };
+  gameId: string | null;
+  localPlayer?: Player;
 
   /** 25 slots: index 0 unused, 1-24 are points */
   points: (PointState | null)[];
@@ -62,12 +66,15 @@ export interface GameState {
     hits: { B: number; W: number };
     borneOff: { B: number; W: number };
   };
+
+  /** Unique ID to track the last update for online syncing */
+  lastUpdateId: string;
 }
 
 /* ─── Actions ─── */
 
 export type GameAction =
-  | { type: 'START_GAME'; mode: GameMode }
+  | { type: 'START_GAME'; mode: GameMode; playerNames?: { B: string, W: string }; gameId?: string; starter?: Player; localPlayer?: Player }
   | { type: 'ROLL_DICE' }
   | { type: 'END_ROLL_ANIMATION' }
   | { type: 'SELECT_DICE_SET'; index: number }
@@ -78,7 +85,10 @@ export type GameAction =
   | { type: 'UNDO'; stepsBack: number }
   | { type: 'END_TURN' }
   | { type: 'FORFEIT_TURN'; reason: string }
+  | { type: 'ABANDON_GAME'; player: Player }
   | { type: 'RESET' }
+  | { type: 'GO_TO_GAMEROOM' }
+  | { type: 'SYNC_STATE'; state: GameState }
   | { type: 'DEV_SETUP_COMPLETE' }
   | { type: 'DEV_ENDGAME_SCENARIO' }
   | { type: 'DEV_ENDGAME_3' }

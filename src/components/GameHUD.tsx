@@ -7,32 +7,44 @@ interface GameHUDProps {
   state: GameState;
   onRollDice: () => void;
   onUndo: (stepsBack: number) => void;
+  onLeaveGame: () => void;
+  localPlayer?: string;
+  turn?: string;
 }
 
-export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo }) => {
+export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onLeaveGame, localPlayer }) => {
   const isBlack = state.turn === 'B';
-  const turnName = isBlack ? 'Zwart' : 'Wit';
+  const colorName = isBlack ? 'Zwart' : 'Wit';
+  const actualPlayerName = state.playerNames ? state.playerNames[state.turn] : colorName;
+  const isMyTurn = state.mode === 'pvp' && localPlayer === state.turn;
+  const turnLabelText = isMyTurn ? 'Jij bent aan zet' : `${actualPlayerName} is aan zet`;
+
   const turnColor = isBlack ? '#1a1a1a' : '#f5f0e8';
   const turnBorder = isBlack ? '#555' : '#c4b99a';
   const needsRoll = !state.rawDice;
   const isAITurn = state.mode === 'pva' && state.turn === 'W';
+  const isWaitingForRemote = state.mode === 'pvp' && localPlayer && localPlayer !== state.turn;
 
   return (
-    <div style={styles.container}>
+    <div 
+      style={styles.container} 
+      className={isWaitingForRemote ? (isBlack ? 'waiting-glow-black' : 'waiting-glow-white') : ''}
+    >
       {/* Top bar: turn */}
       <div style={styles.topBar}>
         <div style={styles.turnInfo}>
           <div style={{
-            width: 24, height: 24, borderRadius: '50%',
-            background: turnColor, border: `2px solid ${turnBorder}`,
+            width: 28, height: 28, borderRadius: '50%',
+            background: turnColor, border: `3px solid ${turnBorder}`,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
           }} />
-          <span style={styles.turnLabel}>{turnName}</span>
+          <span style={styles.turnLabel}>{turnLabelText}</span>
         </div>
       </div>
 
       {/* Dice area */}
       <div style={styles.diceArea}>
-        {needsRoll && !isAITurn && (
+        {needsRoll && !isAITurn && !isWaitingForRemote && (
           <button
             onClick={onRollDice}
             style={styles.rollButton}
@@ -49,6 +61,12 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo }) =
           </button>
         )}
         
+        {needsRoll && isWaitingForRemote && (
+          <div style={{ color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', fontSize: '14px', margin: '10px 0' }}>
+            Wachten op {actualPlayerName}...
+          </div>
+        )}
+        
         {/* Playable dice and Roll animation */}
         <div style={styles.diceContainer}>
           <FloatingDice state={state} onUndo={onUndo} />
@@ -63,6 +81,24 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo }) =
           {state.barW > 0 && <span>Bar ⬜: {state.barW}</span>}
         </div>
       )}
+
+      {/* Leave Game Button */}
+      <div style={styles.leaveContainer}>
+        <button
+          onClick={onLeaveGame}
+          style={styles.leaveButton}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(220,53,69,0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
+          }}
+        >
+          Verlaat Spel
+        </button>
+      </div>
     </div>
   );
 };
@@ -72,13 +108,14 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '10px',
-    padding: '12px 16px',
-    background: 'linear-gradient(180deg, rgba(20,20,31,0.95), rgba(10,10,15,0.95))',
+    justifyContent: 'flex-start',
+    gap: '16px',
+    padding: '8px 12px',
+    background: 'transparent',
     borderRadius: '16px',
-    border: '1px solid rgba(255,255,255,0.06)',
-    minWidth: '260px',
-    maxWidth: '300px',
+    width: '100%',
+    height: '100%',
+    boxSizing: 'border-box',
   },
   topBar: {
     display: 'flex',
@@ -92,9 +129,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '8px',
   },
   turnLabel: {
-    fontSize: '15px',
-    fontWeight: 700,
-    color: '#fff',
+    fontSize: '20px',
+    fontWeight: 800,
+    color: '#1a0e00',
+    textShadow: '0 1px 2px rgba(255,255,255,0.3)',
+    letterSpacing: '0.5px',
   },
   phaseTag: {
     fontSize: '10px',
@@ -179,4 +218,26 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '3px',
     transition: 'width 0.3s ease',
   },
+  leaveContainer: {
+    marginTop: 'auto',
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'center',
+    paddingTop: '16px',
+    borderTop: '1px solid rgba(255,255,255,0.06)'
+  },
+  leaveButton: {
+    padding: '8px 16px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#fff',
+    background: 'linear-gradient(135deg, #dc3545, #a71d2a)',
+    border: '1px solid #7a151f',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+    textTransform: 'uppercase',
+    letterSpacing: '1px'
+  }
 };

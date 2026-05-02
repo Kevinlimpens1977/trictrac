@@ -13,6 +13,7 @@ import {
 import type { GameState } from '../types/GameState';
 import { canBearOff } from '../engine/moveEngine';
 
+
 interface GameBoardProps {
   state: GameState;
   onPointClick: (point: number) => void;
@@ -50,7 +51,7 @@ function getPieceY(isTop: boolean, index: number, count: number): number {
 function hitTest(px: number, py: number): { type: 'point' | 'bar' | 'none'; id: number } {
   const layout = BOARD_LAYOUT;
   const triH = BOTTOM_BASE - BOTTOM_TIP;
-  const halfW = 40;
+  const halfW = 18;
 
   // Check bar
   if (Math.abs(px - layout.bar.x) < layout.bar.w / 2 && Math.abs(py - layout.bar.y) < layout.bar.h / 2) {
@@ -94,6 +95,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
     const py = relY * IMG_H;
 
     const hit = hitTest(px, py);
+
     if (hit.type === 'point') {
       onPointClick(hit.id);
     } else if (hit.type === 'bar') {
@@ -103,6 +105,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
 
   return (
     <div
+      className="game-board"
       ref={containerRef}
       onClick={handleClick}
       style={{
@@ -165,7 +168,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
           const isSetup = state.phase === 'setup';
           if (isSetup) return null; // Geen groen kader tijdens setup
           
-          const halfW = 24;
+          const halfW = 18;
           const rectY = pt.isTop ? pt.yBase : pt.yBase - triH;
           return (
             <rect
@@ -186,7 +189,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
         {!isBearOff && state.selected !== null && (() => {
           const pt = layout.points.find((p) => p.id === state.selected);
           if (!pt) return null;
-          const halfW = 24;
+          const halfW = 18;
           const rectY = pt.isTop ? pt.yBase : pt.yBase - triH;
           return (
             <rect
@@ -224,8 +227,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
                   cx={pt.x}
                   cy={cy}
                   r={PIECE_RADIUS - 2}
-                  fill={isBlack ? '#1a1a1a' : '#f5f0e8'}
-                  stroke={isBlack ? '#444' : '#c4b99a'}
+                  fill={isBlack ? '#2a2a2a' : '#f5f0e8'}
+                  stroke={isBlack ? '#777' : '#c4b99a'}
                   strokeWidth={4}
                   className="piece-enter"
                 />
@@ -234,7 +237,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
                   cy={cy}
                   r={PIECE_RADIUS * 0.6}
                   fill="none"
-                  stroke={isBlack ? '#333' : '#d8d0c0'}
+                  stroke={isBlack ? '#555' : '#d8d0c0'}
                   strokeWidth={3}
                   className={isClimax ? 'piece-enter climax-piece' : 'piece-enter'}
                 />
@@ -248,7 +251,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
           <circle key={`barB-${i}`}
             cx={layout.bar.x} cy={448 - 80 - i * PIECE_DIAMETER}
             r={PIECE_RADIUS - 2}
-            fill="#1a1a1a" stroke="#444" strokeWidth={4} />
+            fill="#2a2a2a" stroke="#777" strokeWidth={4} />
         ))}
         {state.barW > 0 && Array.from({ length: state.barW }).map((_, i) => (
           <circle key={`barW-${i}`}
@@ -291,8 +294,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
                   cx={pt.x}
                   cy={cy}
                   r={PIECE_RADIUS - 2}
-                  fill={isBlack ? '#1a1a1a' : '#f5f0e8'}
-                  stroke={isBlack ? '#444' : '#c4b99a'}
+                  fill={isBlack ? '#2a2a2a' : '#f5f0e8'}
+                  stroke={isBlack ? '#777' : '#c4b99a'}
                   strokeWidth={4}
                 />
                 <circle
@@ -300,12 +303,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
                   cy={cy}
                   r={PIECE_RADIUS * 0.6}
                   fill="none"
-                  stroke={isBlack ? '#333' : '#d8d0c0'}
+                  stroke={isBlack ? '#555' : '#d8d0c0'}
                   strokeWidth={3}
                 />
-             </g>
+              </g>
           );
         })}
+
 
       </svg>
       {children}

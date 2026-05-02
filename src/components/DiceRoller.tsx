@@ -5,13 +5,57 @@ interface DiceRollerProps {
   dice: [number, number] | null;
 }
 
+const playDiceSound = () => {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+
+    const playClick = (time: number, freq: number, duration: number, vol = 0.1) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, time);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.1, time + duration);
+      
+      gain.gain.setValueAtTime(vol, time);
+      gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start(time);
+      osc.stop(time + duration);
+    };
+
+    const now = ctx.currentTime;
+    
+    // Shake 1 (in hand/cup)
+    playClick(now + 0.1, 800, 0.05, 0.05);
+    playClick(now + 0.15, 600, 0.05, 0.05);
+    
+    // Shake 2
+    playClick(now + 0.4, 800, 0.05, 0.05);
+    playClick(now + 0.45, 600, 0.05, 0.05);
+
+    // Roll
+    for (let i = 0; i < 12; i++) {
+      const delay = 0.8 + i * 0.08 + (Math.random() * 0.04);
+      playClick(now + delay, 400 + Math.random() * 300, 0.08, 0.1);
+    }
+  } catch (e) {
+    console.error('Audio play failed', e);
+  }
+};
+
 export const DiceRoller: React.FC<DiceRollerProps> = ({ isRolling, dice }) => {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
     if (isRolling) {
       setShow(true);
-      // Wait for 2 seconds
+      playDiceSound();
+      
       const t = setTimeout(() => {
         setShow(false);
       }, 2000);
@@ -30,49 +74,64 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({ isRolling, dice }) => {
       minHeight: '100px',
     }}>
       <div style={{
-        animation: 'rollFadeOut 2s ease-out forwards',
+        animation: 'shakeAndRoll 2s ease-out forwards',
         display: 'flex',
         gap: '15px',
       }}>
-        <DiceIcon value={dice[0]} delay="0s" />
-        <DiceIcon value={dice[1]} delay="0.1s" />
+        <DiceIcon value={dice[0]} />
+        <DiceIcon value={dice[1]} />
       </div>
       <style>{`
-        @keyframes rollFadeOut {
-          0% { transform: scale(0.5) translateY(-100px) rotate(-180deg); opacity: 0; }
-          20% { transform: scale(1.2) translateY(0px) rotate(10deg); opacity: 1; }
-          40% { transform: scale(1) translateY(-10px) rotate(-10deg); opacity: 1; }
-          60% { transform: scale(1) translateY(0px) rotate(0deg); opacity: 1; }
-          80% { transform: scale(1) translateY(0px) rotate(0deg); opacity: 1; }
+        @keyframes shakeAndRoll {
+          0% { transform: scale(0.8) translateY(-40px) rotate(0deg); opacity: 0; }
+          10% { transform: scale(1) translateY(-50px) rotate(15deg); opacity: 1; }
+          20% { transform: scale(1) translateY(-50px) rotate(-15deg); opacity: 1; }
+          30% { transform: scale(1) translateY(-50px) rotate(15deg); opacity: 1; }
+          40% { transform: scale(1) translateY(-50px) rotate(-15deg); opacity: 1; }
+          50% { transform: scale(1.2) translateY(20px) rotate(720deg); opacity: 1; }
+          70% { transform: scale(1) translateY(0px) rotate(1080deg); opacity: 1; }
+          90% { transform: scale(1) translateY(0px) rotate(1080deg); opacity: 1; }
           100% { transform: scale(0.8) translateY(0px); opacity: 0; }
-        }
-        @keyframes subtleShake {
-          0%, 100% { transform: rotate(0deg); }
-          25% { transform: rotate(5deg); }
-          75% { transform: rotate(-5deg); }
         }
       `}</style>
     </div>
   );
 };
 
-const DiceIcon: React.FC<{ value: number, delay: string }> = ({ value, delay }) => {
-  const faces = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+const DiceIcon: React.FC<{ value: number }> = ({ value }) => {
   return (
     <div style={{
       width: 80,
       height: 80,
-      backgroundColor: 'rgba(245, 240, 232, 0.9)',
+      background: 'radial-gradient(circle at 30% 30%, #fffdfa, #f5f0e8)',
+      border: '1px solid rgba(0,0,0,0.1)',
       borderRadius: '16px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontSize: '64px',
-      color: '#111',
-      boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-      animation: `subtleShake 0.4s ease-in-out ${delay} 3`,
+      boxShadow: '0 12px 24px rgba(0,0,0,0.4), inset 0 -4px 8px rgba(0,0,0,0.1)',
     }}>
-      {faces[value]}
+      <TokenPips value={value} />
     </div>
+  );
+};
+
+const TokenPips: React.FC<{ value: number }> = ({ value }) => {
+  const positions: Record<number, {cx: number, cy: number}[]> = {
+    1: [{cx: 50, cy: 50}],
+    2: [{cx: 25, cy: 25}, {cx: 75, cy: 75}],
+    3: [{cx: 25, cy: 25}, {cx: 50, cy: 50}, {cx: 75, cy: 75}],
+    4: [{cx: 25, cy: 25}, {cx: 75, cy: 25}, {cx: 25, cy: 75}, {cx: 75, cy: 75}],
+    5: [{cx: 25, cy: 25}, {cx: 75, cy: 25}, {cx: 50, cy: 50}, {cx: 25, cy: 75}, {cx: 75, cy: 75}],
+    6: [{cx: 25, cy: 22}, {cx: 75, cy: 22}, {cx: 25, cy: 50}, {cx: 75, cy: 50}, {cx: 25, cy: 78}, {cx: 75, cy: 78}],
+  };
+  
+  const dots = positions[value] || [];
+  return (
+    <svg viewBox="0 0 100 100" style={{ width: '60%', height: '60%', filter: 'drop-shadow(0px 1px 1px rgba(255,255,255,0.4))' }}>
+      {dots.map((dot, i) => (
+        <circle key={i} cx={dot.cx} cy={dot.cy} r="11" fill="#111" />
+      ))}
+    </svg>
   );
 };
