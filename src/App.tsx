@@ -294,6 +294,9 @@ function App() {
   const [introPhase, setIntroPhase] = useState<'intro' | 'game'>(() => {
     return window.location.search.includes('start_pva=1') || window.location.search.includes('test=1') ? 'game' : 'intro';
   });
+  const [isMobilePortrait, setIsMobilePortrait] = useState(() => {
+    return window.matchMedia('(max-width: 700px) and (orientation: portrait)').matches;
+  });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -310,6 +313,13 @@ function App() {
       setIntroPhase('intro');
     }
   }, [state.screen]);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 700px) and (orientation: portrait)');
+    const update = () => setIsMobilePortrait(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
 
   /* ─── Render ─── */
   if (!user) {
@@ -330,7 +340,7 @@ function App() {
   }
 
   return (
-    <div style={styles.gameContainer}>
+    <div className="game-shell" style={styles.gameContainer}>
       {showDevTools && (
         <div style={styles.devPanel}>
           <button onClick={() => dispatch({ type: 'DEV_SETUP_COMPLETE' })} style={styles.devBtn}>DEV: Lopen Test</button>
@@ -340,7 +350,7 @@ function App() {
         </div>
       )}
 
-      <div style={styles.boardWrapper}>
+      <div className="board-wrapper" style={styles.boardWrapper}>
         <GameBoard
           state={state}
           onPointClick={introPhase === 'intro' ? () => {} : handlePointClick}
@@ -369,8 +379,8 @@ function App() {
           )}
 
           {/* Inject HUD over the right section of the board */}
-          {introPhase === 'game' && (
-            <div style={styles.hudOverlay}>
+          {introPhase === 'game' && !isMobilePortrait && (
+            <div className="board-hud-overlay" style={styles.hudOverlay}>
               <GameHUD
                 state={state}
                 localPlayer={state.localPlayer}
@@ -382,6 +392,18 @@ function App() {
           )}
         </GameBoard>
       </div>
+
+      {introPhase === 'game' && isMobilePortrait && (
+        <div className="mobile-hud-panel">
+          <GameHUD
+            state={state}
+            localPlayer={state.localPlayer}
+            onRollDice={handleRollDice}
+            onUndo={(stepsBack) => dispatch({ type: 'UNDO', stepsBack })}
+            onLeaveGame={() => setShowLeaveConfirm(true)}
+          />
+        </div>
+      )}
       
       {state.screen === 'gameover' && state.winner && (
         <GameOverScreen winner={state.winner} stats={state.stats} onRestart={handleRestart} />

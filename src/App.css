@@ -69,3 +69,111 @@
 .waiting-glow-black {
   animation: glowBorderBlack 2s infinite ease-in-out;
 }
+
+.mobile-hud-panel {
+  display: none;
+}
+
+.game-shell {
+  --game-frame-gap: clamp(10px, 1.6vw, 18px);
+  --game-frame-radius: clamp(20px, 2.4vw, 34px);
+  position: relative !important;
+  isolation: isolate;
+  padding: var(--game-frame-gap) !important;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(255, 244, 184, 0.55), transparent 32%),
+    radial-gradient(circle at 82% 16%, rgba(219, 235, 255, 0.7), transparent 34%),
+    linear-gradient(135deg, #f8fbff 0%, #edf5ff 44%, #fff9d7 100%) !important;
+}
+
+.game-shell::before {
+  content: '';
+  position: absolute;
+  inset: -28px;
+  z-index: 0;
+  background: url('/afbeeldingen/trictrachome.png') center/cover no-repeat;
+  filter: blur(22px) brightness(1.12) saturate(0.82);
+  opacity: 0.42;
+  transform: scale(1.04);
+  pointer-events: none;
+}
+
+.board-wrapper {
+  z-index: 1;
+  width: min(calc(100vw - (var(--game-frame-gap) * 2)), calc((100vh - (var(--game-frame-gap) * 2)) * 1.917485)) !important;
+  height: min(calc(100vh - (var(--game-frame-gap) * 2)), calc((100vw - (var(--game-frame-gap) * 2)) * 0.521516)) !important;
+  overflow: hidden;
+  border: 2px solid rgb(255, 255, 255);
+  border-radius: var(--game-frame-radius);
+  box-sizing: border-box;
+  box-shadow: 0 18px 48px rgba(38, 66, 102, 0.28);
+  background: #000;
+}
+
+.board-wrapper .game-board {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .board-hud-overlay {
+    top: 23% !important;
+    height: 50% !important;
+  }
+
+  .board-hud-overlay > div {
+    gap: 8px !important;
+    padding: 6px 10px !important;
+  }
+}
+
+@media (max-width: 700px) and (orientation: portrait) {
+  .game-shell {
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 12px;
+    padding: max(14px, env(safe-area-inset-top)) var(--game-frame-gap) var(--game-frame-gap) !important;
+    overflow: hidden !important;
+  }
+
+  .board-wrapper {
+    width: calc(100vw - (var(--game-frame-gap) * 2)) !important;
+    height: calc((100vw - (var(--game-frame-gap) * 2)) * 0.521516) !important;
+    flex: 0 0 auto;
+    align-items: flex-start !important;
+  }
+
+  .game-board {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    flex: 0 0 auto;
+  }
+
+  .board-hud-overlay {
+    display: none !important;
+  }
+
+  .mobile-hud-panel {
+    display: flex;
+    width: min(94vw, 370px);
+    max-height: calc(100dvh - 245px);
+    min-height: 184px;
+    overflow: hidden;
+    border: 2px solid rgba(96, 58, 22, 0.28);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(248, 226, 175, 0.94), rgba(226, 183, 105, 0.92));
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.38);
+  }
+
+  .mobile-hud-panel > div {
+    min-height: 0;
+    height: auto !important;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+}

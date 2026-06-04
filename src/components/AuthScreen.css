@@ -1,0 +1,182 @@
+.auth-screen {
+  --auth-frame-gap: clamp(10px, 1.6vw, 18px);
+  --auth-frame-radius: clamp(20px, 2.4vw, 34px);
+  isolation: isolate;
+  position: relative;
+  overflow: hidden;
+  padding: var(--auth-frame-gap);
+  box-sizing: border-box;
+  background: #06111f;
+}
+
+.auth-screen::after {
+  content: '';
+  position: absolute;
+  inset: -24px;
+  z-index: 0;
+  background-image: url('/afbeeldingen/bg169vs2.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  filter: blur(18px) brightness(0.6) saturate(0.95);
+  transform: scale(1.04);
+  pointer-events: none;
+}
+
+.auth-art-card {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  width: min(calc(100vw - (var(--auth-frame-gap) * 2)), calc((100vh - (var(--auth-frame-gap) * 2)) * 1.777778));
+  height: min(calc(100vh - (var(--auth-frame-gap) * 2)), calc((100vw - (var(--auth-frame-gap) * 2)) * 0.5625));
+  transform: translate(-50%, -50%);
+  border-radius: var(--auth-frame-radius);
+  border: 2px solid rgb(229, 231, 235);
+  box-sizing: border-box;
+  background-image: url('/afbeeldingen/bg169vs2.png');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+/* Variant A logo treatment: a clipped highlight layer over the baked-in logo. */
+.trictrac-logo-overlay {
+  position: absolute;
+  top: 2%;
+  left: 0;
+  width: 100%;
+  height: 30%;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: 50% 45%;
+  animation: tricTracLogoIntro 700ms cubic-bezier(0.2, 0.88, 0.22, 1.18) 120ms both;
+}
+
+.trictrac-logo-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 4% 10% 28%;
+  border-radius: 999px;
+  background:
+    radial-gradient(ellipse at 50% 46%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.035) 40%, transparent 68%);
+  filter: blur(12px);
+  mix-blend-mode: screen;
+  opacity: 0.32;
+}
+
+.trictrac-logo-shine {
+  position: absolute;
+  top: -38%;
+  left: -36%;
+  width: 28%;
+  height: 178%;
+  border-radius: 999px;
+  background:
+    linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.08) 24%, rgba(255, 255, 255, 0.56) 50%, rgba(255, 255, 255, 0.1) 76%, transparent 100%);
+  filter: blur(9px);
+  opacity: 0;
+  transform: rotate(14deg) translateX(-80%);
+  animation: tricTracShineSweep 1200ms ease-out 820ms both;
+}
+
+.auth-card {
+  position: relative;
+  z-index: 2;
+  width: min(340px, calc(100vw - 64px)) !important;
+  height: auto !important;
+  min-width: 0;
+  min-height: 100px !important;
+  max-width: calc(100vw - 64px) !important;
+  padding: clamp(14px, 2.6vw, 20px) !important;
+  box-sizing: border-box;
+  background-color: rgba(255, 255, 255, 0.62) !important;
+  border: 2px solid rgb(229, 231, 235);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.auth-card button {
+  width: auto !important;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) and (orientation: portrait) {
+  .auth-screen::after {
+    background-image: url('/afbeeldingen/bg916vs2.png');
+  }
+
+  .auth-art-card {
+    width: min(calc(100vw - (var(--auth-frame-gap) * 2)), calc((100vh - (var(--auth-frame-gap) * 2)) * 0.5625));
+    height: min(calc(100vh - (var(--auth-frame-gap) * 2)), calc((100vw - (var(--auth-frame-gap) * 2)) * 1.777778));
+    background-image: url('/afbeeldingen/bg916vs2.png');
+  }
+
+  .trictrac-logo-overlay {
+    top: 8%;
+    left: 4%;
+    width: 92%;
+    height: 22%;
+  }
+
+  .auth-card {
+    width: min(340px, calc(100vw - 48px)) !important;
+    transform: translateY(10vh) !important;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .auth-card {
+    width: min(420px, 56vw) !important;
+    transform: none !important;
+  }
+}
+
+@keyframes tricTracLogoIntro {
+  0% {
+    opacity: 0;
+    transform: translateY(3%) scale(0.96);
+  }
+  58% {
+    opacity: 1;
+    transform: translateY(-1%) scale(1.025);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes tricTracShineSweep {
+  0% {
+    opacity: 0;
+    transform: rotate(14deg) translateX(-80%);
+  }
+  18% {
+    opacity: 0.72;
+  }
+  62% {
+    opacity: 0.58;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(14deg) translateX(520%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trictrac-logo-overlay,
+  .trictrac-logo-shine {
+    animation: none;
+  }
+
+  .trictrac-logo-overlay {
+    opacity: 0;
+    transform: none;
+  }
+}

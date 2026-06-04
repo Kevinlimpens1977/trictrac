@@ -227,6 +227,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderTop: '1px solid rgba(255,255,255,0.06)'
   },
   leaveButton: {
+    minHeight: '36px',
     padding: '8px 16px',
     fontSize: '12px',
     fontWeight: 600,
@@ -238,6 +239,6 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'all 0.2s ease',
     boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
     textTransform: 'uppercase',
-    letterSpacing: '1px'
+    letterSpacing: 0
   }
 };

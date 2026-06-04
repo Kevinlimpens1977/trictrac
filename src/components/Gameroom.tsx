@@ -9,9 +9,11 @@ interface GameroomProps {
 }
 
 type RoomState = 'lobby' | 'toss';
+type LobbyMode = 'menu' | 'local' | 'online';
 
-export const Gameroom: React.FC<GameroomProps> = ({ onBack, onStartMatch }) => {
+export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
   const [roomState, setRoomState] = useState<RoomState>('lobby');
+  const [lobbyMode, setLobbyMode] = useState<LobbyMode>('menu');
   
   const [p1Name, setP1Name] = useState('Speler 1');
   const [p2Name, setP2Name] = useState('Speler 2');
@@ -31,6 +33,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onBack, onStartMatch }) => {
   const [isTossing, setIsTossing] = useState(false);
   const [tossWinner, setTossWinner] = useState<Player | null>(null);
   const [isOnlineMode, setIsOnlineMode] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   // Generate a random 5-character ID for hosting
   useEffect(() => {
@@ -196,11 +199,12 @@ export const Gameroom: React.FC<GameroomProps> = ({ onBack, onStartMatch }) => {
     }
   };
 
-  const handleBack = async () => {
+  const handleLobbyModeBack = async () => {
     if (isWaiting) {
       await handleCancelHost();
     }
-    onBack();
+    setErrorMsg('');
+    setLobbyMode('menu');
   };
 
   // Toss logic for both local and online
@@ -248,7 +252,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onBack, onStartMatch }) => {
   };
 
   return (
-    <div style={styles.container}>
+    <div className="gameRoomScreen" style={styles.container}>
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }
@@ -275,6 +279,48 @@ export const Gameroom: React.FC<GameroomProps> = ({ onBack, onStartMatch }) => {
         .rolling {
           animation: shake 0.2s infinite;
         }
+        .gameRoomScreen {
+          --room-frame-gap: clamp(10px, 1.6vw, 18px);
+          --room-frame-radius: clamp(20px, 2.4vw, 34px);
+          position: relative;
+          isolation: isolate;
+          padding: var(--room-frame-gap);
+          box-sizing: border-box;
+          overflow: hidden;
+          background:
+            radial-gradient(circle at 18% 20%, rgba(255, 244, 184, 0.55), transparent 32%),
+            radial-gradient(circle at 82% 16%, rgba(219, 235, 255, 0.7), transparent 34%),
+            linear-gradient(135deg, #f8fbff 0%, #edf5ff 44%, #fff9d7 100%) !important;
+        }
+        .gameRoomScreen::before {
+          content: '';
+          position: absolute;
+          inset: -28px;
+          z-index: 0;
+          background: url('/afbeeldingen/gameroom_new.png') center/cover no-repeat;
+          filter: blur(22px) brightness(1.12) saturate(0.82);
+          opacity: 0.42;
+          transform: scale(1.04);
+          pointer-events: none;
+        }
+        .gameRoomStage {
+          position: fixed;
+          z-index: 1;
+          inset: var(--room-frame-gap);
+          margin: auto;
+          width: min(calc(100vw - (var(--room-frame-gap) * 2)), calc((100vh - (var(--room-frame-gap) * 2)) * 1.777778)) !important;
+          height: min(calc(100vh - (var(--room-frame-gap) * 2)), calc((100vw - (var(--room-frame-gap) * 2)) * 0.5625)) !important;
+          max-width: none !important;
+          max-height: none !important;
+          min-width: 0 !important;
+          min-height: 0 !important;
+          flex: 0 0 auto;
+          overflow: hidden;
+          border: 2px solid rgb(255, 255, 255);
+          border-radius: var(--room-frame-radius);
+          box-sizing: border-box;
+          box-shadow: 0 18px 48px rgba(38, 66, 102, 0.28);
+        }
         .gameRoomOverlay {
           position: absolute;
           left: var(--room-panel-left, 50%);
@@ -286,40 +332,198 @@ export const Gameroom: React.FC<GameroomProps> = ({ onBack, onStartMatch }) => {
           box-sizing: border-box;
           overflow: hidden;
           padding: 10px 24px;
+          max-width: 100%;
           display: flex;
           flex-direction: column;
           justify-content: center;
         }
-        .gameRoomGrid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 24px;
-          height: 100%;
-          align-items: center;
+        .gameRoomChoices {
+          width: min(48%, 520px);
+          margin: 0 auto;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: clamp(12px, 2.3dvh, 22px);
+          animation: fadeIn 0.3s ease-out;
         }
-        @media (max-width: 900px) {
-          .gameRoomGrid {
-            grid-template-columns: 1fr;
-            align-items: start;
+        .gameRoomChoiceButton {
+          min-height: clamp(46px, 7dvh, 68px);
+          padding: 0 clamp(16px, 3vw, 28px);
+          border: 2px solid rgba(78, 52, 46, 0.35);
+          border-radius: 12px;
+          background: rgba(255, 255, 255, 0.92);
+          color: #2d1b16;
+          font-family: "Impact", sans-serif;
+          font-size: clamp(18px, 3dvh, 30px);
+          line-height: 1.05;
+          letter-spacing: 0;
+          text-transform: uppercase;
+          cursor: pointer;
+          box-shadow: 0 5px 0 rgba(96, 58, 22, 0.26), 0 12px 22px rgba(0, 0, 0, 0.2);
+          transition: transform 0.12s ease, filter 0.12s ease;
+        }
+        .gameRoomChoiceHelp {
+          border-color: #98e30d;
+          text-transform: none;
+          font-family: sans-serif;
+          font-weight: 900;
+        }
+        .gameRoomChoiceLocal {
+          border-color: #12a8e8;
+        }
+        .gameRoomChoiceOnline {
+          border-color: #12a8e8;
+        }
+        .gameRoomChoiceButton:hover {
+          filter: brightness(1.04);
+          transform: translateY(-1px);
+        }
+        .gameRoomChoiceButton:active {
+          transform: translateY(1px);
+        }
+        .gameRoomSinglePanel {
+          width: min(58%, 620px);
+          margin: 0 auto;
+          animation: fadeIn 0.3s ease-out;
+        }
+        .gameRoomSinglePanel.isOnline {
+          width: min(62%, 680px);
+        }
+        .gameRoomHelpDialog {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          z-index: 30;
+          width: min(620px, 82%);
+          max-height: 74%;
+          transform: translate(-50%, -50%);
+          overflow-y: auto;
+          padding: clamp(20px, 3vw, 32px);
+          box-sizing: border-box;
+          color: #3e2723;
+          background: rgba(255, 255, 255, 0.9);
+          border: 2px solid rgba(255, 255, 255, 0.95);
+          border-radius: 18px;
+          box-shadow: 0 18px 48px rgba(0, 0, 0, 0.36);
+          backdrop-filter: blur(8px);
+        }
+        .gameRoomHelpDialog h2 {
+          margin: 0 0 14px;
+          text-align: center;
+          font-family: "Impact", sans-serif;
+          font-size: clamp(24px, 4dvh, 38px);
+          text-transform: uppercase;
+        }
+        .gameRoomHelpDialog p,
+        .gameRoomHelpDialog li {
+          font-size: clamp(15px, 2dvh, 18px);
+          line-height: 1.45;
+          font-weight: 600;
+        }
+        .gameRoomHelpClose {
+          position: absolute;
+          top: 10px;
+          right: 12px;
+          border: 0;
+          border-radius: 999px;
+          width: 36px;
+          height: 36px;
+          background: #c92a2a;
+          color: #fff;
+          font-weight: 900;
+          cursor: pointer;
+        }
+        @media (max-width: 900px), (max-height: 520px) {
+          .gameRoomOverlay {
+            left: 50%;
+            top: 50%;
+            width: min(94vw, 760px);
+            height: auto;
+            max-height: calc(100dvh - 20px);
+            max-width: calc(100% - 16px);
+            padding: 12px;
             overflow-y: auto;
+            justify-content: flex-start;
+            background: rgba(246, 224, 177, 0.9);
+            border: 1px solid rgba(78, 52, 46, 0.35);
+            border-radius: 14px;
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(2px);
+          }
+          .gameRoomChoices,
+          .gameRoomSinglePanel,
+          .gameRoomSinglePanel.isOnline {
+            width: 100%;
+          }
+          .gameRoomChoices {
+            gap: 12px;
+          }
+          .gameRoomChoiceButton {
+            min-height: 46px;
+            font-size: clamp(17px, 3.4dvh, 24px);
+          }
+          .gameRoomColumn {
+            height: auto !important;
+            min-height: 0;
+            justify-content: flex-start !important;
+            gap: 8px !important;
+          }
+        }
+        @media (max-width: 560px) and (orientation: portrait) {
+          .gameRoomChoices,
+          .gameRoomSinglePanel,
+          .gameRoomSinglePanel.isOnline {
+            width: 100%;
+          }
+        }
+        @media (max-height: 520px) and (orientation: landscape) {
+          .gameRoomOverlay {
+            width: min(96vw, 820px);
+            max-height: calc(100dvh - 12px);
+            padding: 8px 12px;
+          }
+          .gameRoomChoices {
+            width: min(64%, 520px);
+            gap: 8px;
+          }
+          .gameRoomChoiceButton {
+            min-height: 40px;
+            font-size: clamp(16px, 5dvh, 22px);
           }
         }
       `}</style>
       
       <div 
+        className="gameRoomStage"
         style={{
           ...styles.gameRoomStage,
           '--room-panel-left': '50%',
           '--room-panel-top': '54%',
-          '--room-panel-width': '56%',
-          '--room-panel-height': '58%'
+          '--room-panel-width': '72%',
+          '--room-panel-height': '66%'
         } as React.CSSProperties}
       >
         <div className="gameRoomOverlay">
           {roomState === 'lobby' && (
-            <div className="gameRoomGrid">
+            <>
+            {lobbyMode === 'menu' && (
+              <div className="gameRoomChoices">
+                <button className="gameRoomChoiceButton gameRoomChoiceHelp" onClick={() => setShowHelp(true)}>
+                  Speluitleg
+                </button>
+                <button className="gameRoomChoiceButton gameRoomChoiceLocal" onClick={() => setLobbyMode('local')}>
+                  Speel op één computer
+                </button>
+                <button className="gameRoomChoiceButton gameRoomChoiceOnline" onClick={() => setLobbyMode('online')}>
+                  Speel online
+                </button>
+              </div>
+            )}
+
+            {lobbyMode === 'local' && (
+            <div className="gameRoomSinglePanel">
               {/* LEFT COLUMN: LOCAL PLAY */}
-              <div style={styles.column}>
+              <div className="gameRoomColumn" style={styles.column}>
                 <h2 style={styles.columnTitle}>Op 1 computer</h2>
                 <input 
                   value={p1Name} 
@@ -336,13 +540,17 @@ export const Gameroom: React.FC<GameroomProps> = ({ onBack, onStartMatch }) => {
                 <button onClick={handleLocalStart} style={styles.btnSupercell}>
                   Start Spel
                 </button>
-                <button onClick={handleBack} style={{...styles.btnSupercellRed, marginTop: '10px'}}>
+                <button onClick={handleLobbyModeBack} style={{...styles.btnSupercellRed, marginTop: '10px'}}>
                   Terug
                 </button>
               </div>
+            </div>
+            )}
 
+            {lobbyMode === 'online' && (
+            <div className="gameRoomSinglePanel isOnline">
               {/* RIGHT COLUMN: ONLINE PLAY */}
-              <div style={styles.column}>
+              <div className="gameRoomColumn" style={styles.column}>
                 {!isWaiting ? (
                   <>
                     <h2 style={styles.columnTitle}>Online Spelen</h2>
@@ -371,7 +579,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onBack, onStartMatch }) => {
                           />
                           Privé spel
                         </label>
-                        <button onClick={handleHostGame} style={{...styles.btnSupercellBlue, width: '50%', height: '36px', fontSize: '14px'}}>
+                        <button onClick={handleHostGame} style={{...styles.btnSupercellBlue, width: '50%', height: '38px', fontSize: '14px'}}>
                           Host Game
                         </button>
                       </div>
@@ -399,11 +607,14 @@ export const Gameroom: React.FC<GameroomProps> = ({ onBack, onStartMatch }) => {
                         style={{...styles.compactInput, width: '60%'}} 
                         placeholder="Privé ID" 
                       />
-                      <button onClick={() => handleJoinGame()} style={{...styles.btnSupercellBlue, width: '38%', height: '40px', fontSize: '12px'}}>
+                      <button onClick={() => handleJoinGame()} style={{...styles.btnSupercellBlue, width: '38%', height: '38px', fontSize: '12px'}}>
                         Join ID
                       </button>
                     </div>
                     {errorMsg && <p style={styles.error}>{errorMsg}</p>}
+                    <button onClick={handleLobbyModeBack} style={{...styles.btnSupercellRed, marginTop: '6px'}}>
+                      Terug
+                    </button>
                   </>
                 ) : (
                   <div style={styles.waitingContainer}>
@@ -411,13 +622,15 @@ export const Gameroom: React.FC<GameroomProps> = ({ onBack, onStartMatch }) => {
                     <div style={styles.spinner}></div>
                     <p style={styles.text}>Wachten op tegenstander...</p>
                     <p style={styles.text}>Deel dit Game ID: <strong>{gameId}</strong></p>
-                    <button onClick={handleCancelHost} style={{...styles.btnSupercellRed, marginTop: '10px'}}>
-                      Annuleren
+                    <button onClick={handleLobbyModeBack} style={{...styles.btnSupercellRed, marginTop: '10px'}}>
+                      Terug
                     </button>
                   </div>
                 )}
               </div>
             </div>
+            )}
+            </>
           )}
 
           {roomState === 'toss' && (
@@ -459,6 +672,21 @@ export const Gameroom: React.FC<GameroomProps> = ({ onBack, onStartMatch }) => {
             </div>
           )}
         </div>
+        {showHelp && (
+          <div className="gameRoomHelpDialog" role="dialog" aria-modal="true">
+            <button className="gameRoomHelpClose" onClick={() => setShowHelp(false)} aria-label="Sluit speluitleg">
+              X
+            </button>
+            <h2>Speluitleg</h2>
+            <p>Tric-Trac is een eeuwenoud bordspel voor twee spelers.</p>
+            <ul>
+              <li>Beide spelers hebben 15 stenen.</li>
+              <li>Gooi met twee dobbelstenen om te verplaatsen.</li>
+              <li>Gooi je dubbel? Dan mag je de ogen spelen, en het spiegelbeeld aan de overkant.</li>
+              <li>Wie als eerste al zijn stenen veilig van het bord haalt, wint.</li>
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -511,22 +739,24 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#111',
   },
   gameRoomStage: {
-    position: 'relative',
+    position: 'fixed',
+    inset: 'var(--room-frame-gap)',
+    margin: 'auto',
     width: '100%',
     height: '100%',
     maxWidth: 'calc(100vh * (16/9))',
     maxHeight: 'calc(100vw / (16/9))',
     aspectRatio: '16 / 9',
     background: 'url("/afbeeldingen/gameroom_new.png") center/cover no-repeat',
-    margin: '0 auto',
     overflow: 'hidden',
   },
   column: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    gap: '10px',
     height: '100%',
     justifyContent: 'center',
+    alignItems: 'center',
     animation: 'fadeIn 0.3s ease-out',
   },
   tossContainer: {
@@ -544,9 +774,9 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
     margin: '0 0 4px 0',
     fontFamily: '"Impact", sans-serif',
-    fontSize: 'clamp(20px, 2.5vw, 28px)',
+    fontSize: 'clamp(18px, 2.6dvh, 28px)',
     textTransform: 'uppercase',
-    letterSpacing: '1px',
+    letterSpacing: 0,
     textShadow: '0 1px 2px rgba(255,255,255,0.6)',
   },
   compactRow: {
@@ -578,13 +808,13 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
   },
   compactInput: {
-    height: '40px',
+    height: 'clamp(36px, 5.5dvh, 40px)',
     padding: '0 12px',
     borderRadius: '8px',
     border: '2px solid #8d6e63',
     background: 'rgba(255,255,255,0.9)',
     color: '#3e2723',
-    fontSize: 'clamp(12px, 1.2vw, 16px)',
+    fontSize: 'clamp(12px, 2dvh, 16px)',
     outline: 'none',
     fontFamily: 'sans-serif',
     textAlign: 'center',
@@ -593,14 +823,14 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
   },
   btnSupercell: {
-    height: '44px',
+    height: 'clamp(38px, 5.8dvh, 44px)',
     background: 'linear-gradient(180deg, #fbbc05 0%, #e38a04 100%)',
     border: '2px solid #b86200',
     borderRadius: '12px',
     color: 'white',
     fontFamily: '"Impact", sans-serif',
     textTransform: 'uppercase',
-    fontSize: 'clamp(14px, 1.5vw, 18px)',
+    fontSize: 'clamp(13px, 2.2dvh, 18px)',
     cursor: 'pointer',
     boxShadow: '0 4px 0 #b86200, 0 6px 12px rgba(0,0,0,0.3)',
     textShadow: '1px 1px 1px rgba(0,0,0,0.5)',
@@ -611,14 +841,14 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
   },
   btnSupercellBlue: {
-    height: '44px',
+    height: 'clamp(38px, 5.8dvh, 44px)',
     background: 'linear-gradient(180deg, #5fc3fa 0%, #1e87d6 100%)',
     border: '2px solid #104e7d',
     borderRadius: '12px',
     color: 'white',
     fontFamily: '"Impact", sans-serif',
     textTransform: 'uppercase',
-    fontSize: 'clamp(14px, 1.5vw, 18px)',
+    fontSize: 'clamp(13px, 2.2dvh, 18px)',
     cursor: 'pointer',
     boxShadow: '0 4px 0 #104e7d, 0 6px 12px rgba(0,0,0,0.3)',
     textShadow: '1px 1px 1px rgba(0,0,0,0.5)',
@@ -629,14 +859,14 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
   },
   btnSupercellRed: {
-    height: '44px',
+    height: 'clamp(38px, 5.8dvh, 44px)',
     background: 'linear-gradient(180deg, #ff6b6b 0%, #c92a2a 100%)',
     border: '2px solid #861616',
     borderRadius: '12px',
     color: 'white',
     fontFamily: '"Impact", sans-serif',
     textTransform: 'uppercase',
-    fontSize: 'clamp(14px, 1.5vw, 18px)',
+    fontSize: 'clamp(13px, 2.2dvh, 18px)',
     cursor: 'pointer',
     boxShadow: '0 4px 0 #861616, 0 6px 12px rgba(0,0,0,0.3)',
     textShadow: '1px 1px 1px rgba(0,0,0,0.5)',
@@ -673,16 +903,18 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '8px',
   },
   gameListContainer: {
-    flex: 1,
     background: 'rgba(255,255,255,0.6)',
     borderRadius: '8px',
     border: '1px solid #8d6e63',
-    padding: '8px',
+    padding: '6px',
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
     gap: '4px',
-    minHeight: '80px',
+    maxHeight: 'clamp(44px, 14dvh, 110px)',
+    minHeight: '44px',
+    width: '100%',
+    boxSizing: 'border-box',
   },
   gameListItem: {
     display: 'flex',
@@ -811,5 +1043,3 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
   }
 };
-
-

@@ -1,12 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import videoMp4 from '../assets/homevideo5s.mp4';
 import fallbackImg from '../assets/trictrachome.png';
-import helpVideo1Mp4 from '../assets/hulpschermvideo1.mp4';
-import helpVideo2Mp4 from '../assets/hulpschermvideo2.mp4';
 
 const DEBUG_HITBOXES = false;
-
-type HelpState = 'closed' | 'opening' | 'content' | 'closing-text' | 'closing';
 
 interface MenuScreenProps {
   onStart: (mode: 'pvp' | 'pva') => void;
@@ -15,79 +11,67 @@ interface MenuScreenProps {
 
 export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => {
   const [loaded, setLoaded] = useState(false);
-  const [helpState, setHelpState] = useState<HelpState>('closed');
-  const video1Ref = useRef<HTMLVideoElement>(null);
-  const video2Ref = useRef<HTMLVideoElement>(null);
-
-  const handleOpenHelp = () => {
-    setHelpState('opening');
-    if (video1Ref.current) {
-      video1Ref.current.currentTime = 0;
-      video1Ref.current.play();
-    }
-  };
-
-  const handleVideo1End = () => {
-    if (helpState === 'opening') {
-      setHelpState('content');
-    }
-  };
-
-  const handleCloseHelp = () => {
-    // Fade out de tekst eerst
-    setHelpState('closing-text');
-    
-    // Na 500ms (duur van fade out css transition) de tweede video starten
-    setTimeout(() => {
-      setHelpState('closing');
-      if (video2Ref.current) {
-        video2Ref.current.currentTime = 0;
-        video2Ref.current.play();
-      }
-    }, 500);
-  };
-
-  const handleVideo2End = () => {
-    if (helpState === 'closing') {
-      setHelpState('closed');
-    }
-  };
-
-  const isHelpActive = helpState !== 'closed';
 
   return (
     <div className="startScreen">
       <style>{`
         /* FULLSCREEN WRAPPER */
         .startScreen {
+          --menu-frame-gap: clamp(10px, 1.6vw, 18px);
+          --menu-frame-radius: clamp(20px, 2.4vw, 34px);
           position: relative;
+          isolation: isolate;
           width: 100vw;
           height: 100vh;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #050505;
+          padding: var(--menu-frame-gap);
+          box-sizing: border-box;
+          background:
+            radial-gradient(circle at 18% 20%, rgba(255, 244, 184, 0.55), transparent 32%),
+            radial-gradient(circle at 82% 16%, rgba(219, 235, 255, 0.7), transparent 34%),
+            linear-gradient(135deg, #f8fbff 0%, #edf5ff 44%, #fff9d7 100%);
           overflow: hidden;
 
           /* --- FINETUNED HITBOX VALUES --- */
-          --pvp-left: 31%;
-          --pvp-top: 90%;
-          --pvp-width: 30%;
+          --pvp-left: 16%;
+          --pvp-top: 86%;
+          --pvp-width: 32%;
           --pvp-height: 10%;
 
-          --pvc-left: 69%;
-          --pvc-top: 90%;
-          --pvc-width: 30%;
+          --pvc-left: 52.4%;
+          --pvc-top: 86%;
+          --pvc-width: 32%;
           --pvc-height: 10%;
+        }
+
+        .startScreen::before {
+          content: '';
+          position: absolute;
+          inset: -28px;
+          z-index: 0;
+          background: url('${fallbackImg}') center/cover no-repeat;
+          filter: blur(22px) brightness(1.12) saturate(0.82);
+          opacity: 0.42;
+          transform: scale(1.04);
+          pointer-events: none;
         }
 
         /* 16:9 STAGE */
         .videoStage {
           position: relative;
+          z-index: 1;
           aspect-ratio: 16 / 9;
-          width: 100%;
-          max-height: 100vh;
-          max-width: calc(100vh * (16 / 9));
+          width: min(calc(100vw - (var(--menu-frame-gap) * 2)), calc((100vh - (var(--menu-frame-gap) * 2)) * 1.777778));
+          height: min(calc(100vh - (var(--menu-frame-gap) * 2)), calc((100vw - (var(--menu-frame-gap) * 2)) * 0.5625));
+          max-width: none;
+          max-height: none;
+          overflow: hidden;
+          border: 2px solid rgb(255, 255, 255);
+          border-radius: var(--menu-frame-radius);
+          box-sizing: border-box;
+          box-shadow: 0 18px 48px rgba(38, 66, 102, 0.28);
           background: #000 url('${fallbackImg}') center/cover no-repeat;
         }
 
@@ -128,6 +112,7 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
           font-size: 0;
           overflow: hidden;
           cursor: pointer;
+          min-height: 0;
         }
 
         .hitbox-pvp {
@@ -160,7 +145,8 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
           text-shadow: 0.1vh 0.2vh 0.2vh rgba(0,0,0,0.8);
           transition: all 0.1s ease-in-out;
           pointer-events: auto;
-          letter-spacing: 1px;
+          letter-spacing: 0;
+          min-height: 36px;
         }
 
         .btn-supercell:hover {
@@ -172,19 +158,6 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
         .btn-supercell:active {
           transform: scale(0.96) translateY(0.4vh);
           box-shadow: 0 0.2vh 0 #104e7d, 0 0.4vh 1vh rgba(0,0,0,0.4);
-        }
-
-        /* SPELUITLEG BUTTON */
-        .speluitleg-btn {
-          left: 50%;
-          top: 76%; 
-          transform: translateX(-50%);
-        }
-        .speluitleg-btn:hover {
-          transform: translateX(-50%) scale(1.045);
-        }
-        .speluitleg-btn:active {
-          transform: translateX(-50%) scale(0.96) translateY(0.4vh);
         }
 
         /* LOGOUT BUTTON */
@@ -206,99 +179,16 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
           box-shadow: 0 0.2vh 0 #8b0000, 0 0.4vh 1vh rgba(0,0,0,0.4);
         }
 
-        /* HELP VIDEOS */
-        .helpVideo {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          pointer-events: none;
-          opacity: 0;
-          z-index: 15;
-          transition: opacity 0.15s ease-in-out;
+        @media (orientation: portrait) {
+
         }
 
-        .helpVideo.active {
-          opacity: 1;
-        }
+        @media (max-height: 520px) {
+          .btn-supercell {
+            padding: 1vh 2.6vh;
+            font-size: clamp(16px, 4dvh, 24px);
+          }
 
-        /* HELP PANEL TEXTOVERLAY */
-        .helpPanel {
-          --help-panel-left: 50%;
-          --help-panel-top: 50%;
-          --help-panel-width: 58%;
-          --help-panel-height: 48%;
-
-          position: absolute;
-          left: var(--help-panel-left);
-          top: var(--help-panel-top);
-          width: var(--help-panel-width);
-          height: var(--help-panel-height);
-          transform: translate(-50%, -50%);
-          color: #3e2723;
-          font-family: sans-serif;
-          opacity: 0;
-          transition: opacity 0.5s ease;
-          pointer-events: none;
-          z-index: 20;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-
-        .helpPanel.visible {
-          opacity: 1;
-          pointer-events: auto;
-        }
-
-        /* CLOSE BUTTON */
-        .btn-close {
-          top: 0;
-          right: 0;
-          transform: translate(50%, -50%);
-          background: linear-gradient(180deg, #ff6b6b 0%, #c92a2a 100%);
-          border-color: #861616;
-          box-shadow: 0 0.6vh 0 #861616, 0 0.8vh 1.5vh rgba(0,0,0,0.5);
-          font-size: 2vh;
-          padding: 0.8vh 2vh;
-        }
-        .btn-close:hover {
-          transform: translate(50%, -50%) scale(1.045);
-          box-shadow: 0 0.6vh 0 #861616, 0 1vh 2vh rgba(0,0,0,0.6);
-        }
-        .btn-close:active {
-          transform: translate(50%, -50%) scale(0.96) translateY(0.4vh);
-          box-shadow: 0 0.2vh 0 #861616, 0 0.4vh 1vh rgba(0,0,0,0.4);
-        }
-
-        /* TEKST BINNEN HET PANEEL */
-        .helpPanelContent {
-          width: 100%;
-          height: 100%;
-          overflow-y: auto;
-          padding: 2vh 4vh;
-          box-sizing: border-box;
-          text-align: left;
-        }
-
-        .helpPanelContent h2 {
-          margin: 0 0 2vh 0;
-          font-size: 4vh;
-          text-align: center;
-          font-weight: 900;
-          text-transform: uppercase;
-        }
-
-        .helpPanelContent p, .helpPanelContent ul {
-          font-size: 2.2vh;
-          line-height: 1.5;
-          margin: 0 0 1.5vh 0;
-          font-weight: 500;
-        }
-
-        .helpPanelContent ul {
-          padding-left: 3vh;
         }
       `}</style>
 
@@ -316,30 +206,7 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
           <source src={videoMp4} type="video/mp4" />
         </video>
 
-        {/* HELP VIDEO 1 (OPENING) */}
-        <video 
-          ref={video1Ref}
-          className={`helpVideo ${['opening', 'content', 'closing-text'].includes(helpState) ? 'active' : ''}`}
-          src={helpVideo1Mp4}
-          muted
-          playsInline
-          preload="auto"
-          onEnded={handleVideo1End}
-        />
-
-        {/* HELP VIDEO 2 (CLOSING) */}
-        <video 
-          ref={video2Ref}
-          className={`helpVideo ${helpState === 'closing' ? 'active' : ''}`}
-          src={helpVideo2Mp4}
-          muted
-          playsInline
-          preload="auto"
-          onEnded={handleVideo2End}
-        />
-
-        {/* OVERLAY LAYER (HIDDEN DURING HELP) */}
-        <div className="overlayLayer" style={{ opacity: isHelpActive ? 0 : 1, pointerEvents: isHelpActive ? 'none' : 'auto' }}>
+        <div className="overlayLayer">
           <button 
             className="hitboxBtn hitbox-pvp" 
             aria-label="Start speler tegen speler"
@@ -352,10 +219,6 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
             onClick={() => onStart('pva')}
           />
 
-          <button className="btn-supercell speluitleg-btn" onClick={handleOpenHelp}>
-            Speluitleg
-          </button>
-
           {onLogout && (
             <button className="btn-supercell logout-btn" onClick={onLogout}>
               Uitloggen
@@ -363,20 +226,6 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
           )}
         </div>
 
-        {/* HELP TEXT PANEL */}
-        <div className={`helpPanel ${helpState === 'content' ? 'visible' : ''}`}>
-          <button className="btn-supercell btn-close" onClick={handleCloseHelp}>X</button>
-          <div className="helpPanelContent">
-            <h2>Speluitleg</h2>
-            <p>Tric-Trac is een eeuwenoud bordspel voor twee spelers.</p>
-            <ul>
-              <li>Beide spelers hebben 15 stenen.</li>
-              <li>Gooi met twee dobbelstenen om te verplaatsen.</li>
-              <li>Gooi je dubbel? Dan mag je de ogen spelen, én het spiegelbeeld aan de overkant!</li>
-              <li>Wie als eerste al zijn stenen veilig van het bord haalt, wint.</li>
-            </ul>
-          </div>
-        </div>
       </div>
     </div>
   );

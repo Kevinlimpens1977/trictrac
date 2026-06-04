@@ -2,9 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import './AuthScreen.css';
 
 interface AuthScreenProps {
   onAuthenticated: (user: User) => void;
+}
+
+function AuthArtCard() {
+  return (
+    <div className="auth-art-card auth-art-card--variant-a" aria-hidden="true">
+      {/* Variant A: overlay only, the source image stays one responsive background. */}
+      <div className="trictrac-logo-overlay">
+        <div className="trictrac-logo-shine" />
+      </div>
+    </div>
+  );
 }
 
 export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
@@ -39,8 +51,9 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
 
   if (loading) {
     return (
-      <div style={styles.container}>
-        <div style={styles.card}>
+      <div className="auth-screen" style={styles.container}>
+        <AuthArtCard />
+        <div className="auth-card" style={styles.card}>
           <h1 style={styles.loadingText}>Laden...</h1>
         </div>
       </div>
@@ -48,11 +61,10 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
   }
 
   return (
-    <div style={styles.container}>
+    <div className="auth-screen" style={styles.container}>
+      <AuthArtCard />
       {/* Het 'patch' kader om de oude elementen af te dekken */}
-      <div style={styles.card}>
-        <h2 style={styles.title}>Spelen als</h2>
-        
+      <div className="auth-card" style={styles.card}>
         <button onClick={handleGoogleLogin} style={styles.googleButton}>
           <img 
             src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
@@ -75,36 +87,23 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'url(/afbeeldingen/inlogscherm.png) center/cover no-repeat',
     backgroundColor: '#0a0a0a',
     fontFamily: '"Inter", sans-serif',
   },
   card: {
-    // Effen beige/hout kleur om de achtergrond af te dekken
-    background: '#e6ceaa',
-    padding: '40px',
-    borderRadius: '24px',
-    // Subtiele schaduw zodat het lijkt alsof het op het bord ligt
-    boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1), 0 4px 15px rgba(0,0,0,0.2)',
-    width: '470px',
-    height: '580px',
-    maxWidth: '90%',
+    padding: '28px',
+    borderRadius: '22px',
+    boxShadow: '0 16px 40px rgba(0,0,0,0.22)',
+    width: 'auto',
+    minWidth: 'min(340px, 86vw)',
+    maxWidth: 'min(440px, 90vw)',
     textAlign: 'center',
     zIndex: 10,
-    // Verplaats het blok iets naar beneden over de oude inputs
-    transform: 'translateY(5vh)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     gap: '20px',
-  },
-  title: {
-    color: '#5c3a21', // Donkerbruin hout contrast
-    fontSize: '20px',
-    fontWeight: 'bold',
-    margin: 0,
-    marginBottom: '10px',
   },
   loadingText: {
     color: '#5c3a21',
