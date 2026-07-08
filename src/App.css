@@ -190,6 +190,7 @@
    onder de geschilderde titel (papier: x 67-93%, y 14-80% van het bord).
    De dobbelstenen rollen op het bord, dus dit compacte vlak volstaat. */
 .board-hud-overlay {
+  --hud-cube: 57px;
   position: absolute;
   left: 67.4%;
   top: 21%;
@@ -207,6 +208,7 @@
    het paneel weer een eigen achtergrond en een ruimere maat. */
 @media (max-width: 1100px) {
   .board-hud-overlay {
+    --hud-cube: 40px;
     left: 65.8%;
     top: 10%;
     width: 27%;
@@ -281,6 +283,7 @@
   }
 
   .mobile-hud-panel {
+    --hud-cube: 48px;
     display: flex;
     flex: 1 1 auto;
     width: min(94vw, 420px);

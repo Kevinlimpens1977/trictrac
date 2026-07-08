@@ -13,8 +13,10 @@ import { Pips } from './Die';
 
 type CubeState = 'used' | 'active' | 'pending';
 
-const CUBE = 38; // px, front-face
-const HALF = CUBE / 2;
+/** Kubusmaat via CSS-var: 57px op ruime schermen, compacter op smalle
+    schermen (zie --hud-cube in App.css). */
+const CUBE = 'var(--hud-cube, 57px)';
+const HALF = `calc(${CUBE} / 2)`;
 
 const FACE_BASE: React.CSSProperties = {
   position: 'absolute',
@@ -46,8 +48,8 @@ const MiniCube: React.FC<{
       aria-label={label}
       style={{
         position: 'relative',
-        width: CUBE + 8,
-        height: CUBE + 12,
+        width: `calc(${CUBE} + 8px)`,
+        height: `calc(${CUBE} + 12px)`,
         paddingTop: 8,
         perspective: 500,
         cursor: onClick ? 'pointer' : 'default',
@@ -74,7 +76,7 @@ const MiniCube: React.FC<{
             ...FACE_BASE,
             border,
             borderStyle: isUsed ? 'dashed' : 'solid',
-            transform: `translateZ(${HALF}px)`,
+            transform: `translateZ(${HALF})`,
             background: isActive ? 'rgba(76, 175, 80, 0.12)' : FACE_BASE.background,
             boxShadow: isActive ? '0 0 12px rgba(76, 175, 80, 0.55)' : undefined,
           }}
@@ -88,7 +90,7 @@ const MiniCube: React.FC<{
             border,
             borderStyle: isUsed ? 'dashed' : 'solid',
             background: '#f3ecd8',
-            transform: `rotateX(90deg) translateZ(${HALF}px)`,
+            transform: `rotateX(90deg) translateZ(${HALF})`,
           }}
         />
         {/* side */}
@@ -98,7 +100,7 @@ const MiniCube: React.FC<{
             border,
             borderStyle: isUsed ? 'dashed' : 'solid',
             background: '#e6dcc0',
-            transform: `rotateY(90deg) translateZ(${HALF}px)`,
+            transform: `rotateY(90deg) translateZ(${HALF})`,
           }}
         />
       </div>
@@ -108,15 +110,15 @@ const MiniCube: React.FC<{
             position: 'absolute',
             top: 0,
             right: -2,
-            width: 18,
-            height: 18,
+            width: 20,
+            height: 20,
             borderRadius: '50%',
             background: '#f9efd7',
             border: '1px solid #8d6e63',
             color: '#5d4433',
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: 900,
-            lineHeight: '16px',
+            lineHeight: '18px',
             textAlign: 'center',
             opacity: 1,
           }}
@@ -154,7 +156,7 @@ export const FloatingDice: React.FC<FloatingDiceProps> = ({ state, onUndo, inter
           justifyContent: 'center',
           alignItems: 'flex-end',
           flexWrap: 'wrap',
-          maxWidth: 4 * (CUBE + 8) + 3 * 12,
+          maxWidth: `calc(4 * (${CUBE} + 8px) + 36px)`,
           margin: '0 auto',
         }}
       >
