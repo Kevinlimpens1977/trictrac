@@ -168,8 +168,8 @@
 
 .board-wrapper {
   z-index: 1;
-  width: min(calc(100vw - (var(--game-frame-gap) * 2)), calc((100vh - (var(--game-frame-gap) * 2)) * 1.917485)) !important;
-  height: min(calc(100vh - (var(--game-frame-gap) * 2)), calc((100vw - (var(--game-frame-gap) * 2)) * 0.521516)) !important;
+  width: min(calc(100vw - (var(--game-frame-gap) * 2)), calc((100dvh - (var(--game-frame-gap) * 2)) * 1.917485)) !important;
+  height: min(calc(100dvh - (var(--game-frame-gap) * 2)), calc((100vw - (var(--game-frame-gap) * 2)) * 0.521516)) !important;
   overflow: hidden;
   border: 2px solid rgb(255, 255, 255);
   border-radius: var(--game-frame-radius);
@@ -246,6 +246,40 @@
   .board-hud-overlay .hud-turn-label {
     font-size: 14px !important;
     line-height: 1.15 !important;
+  }
+}
+
+/* Korte landscape-schermen (telefoons): NA het 1100px-blok zodat de
+   kleinere kubusmaat wint — een 8-stenen tric-trac-worp moet passen. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .board-hud-overlay {
+    --hud-cube: 30px;
+    top: 6%;
+    height: 88%;
+  }
+
+  .board-hud-overlay > div {
+    gap: 6px !important;
+    padding: 4px 8px !important;
+  }
+
+  .board-hud-overlay .hud-msg {
+    min-height: 20px !important;
+    max-height: 20px !important;
+    font-size: 10.5px !important;
+  }
+
+  .board-hud-overlay .hud-cube-row {
+    gap: 6px !important;
+  }
+
+  .board-hud-overlay .hud-dots {
+    margin-top: 8px !important;
+  }
+
+  /* Terugnemen kan via de kubussen zelf; de losse knop past hier niet */
+  .board-hud-overlay .hud-undo-btn {
+    display: none !important;
   }
 }
 

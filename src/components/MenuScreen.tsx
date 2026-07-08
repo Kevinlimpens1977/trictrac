@@ -25,6 +25,7 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout, caree
           isolation: isolate;
           width: 100vw;
           height: 100vh;
+          height: 100dvh;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -53,7 +54,7 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout, caree
         .menuLayout {
           position: relative;
           z-index: 1;
-          width: min(calc(100vw - (var(--menu-frame-gap) * 2)), calc((100vh - (var(--menu-frame-gap) * 2)) * 1.777778));
+          width: min(calc(100vw - (var(--menu-frame-gap) * 2)), calc((100dvh - (var(--menu-frame-gap) * 2)) * 1.777778));
         }
 
         /* Exact stage-grote ankerbox: absolute kinderen (knoppen, chip)

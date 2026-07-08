@@ -122,7 +122,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     width: '100vw',
-    height: '100vh',
+    height: '100dvh',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

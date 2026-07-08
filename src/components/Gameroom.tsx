@@ -318,6 +318,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, initialJoinId 
         }
         .gameRoomScreen {
           --room-frame-gap: clamp(10px, 1.6vw, 18px);
+          height: 100dvh;
           --room-frame-radius: clamp(20px, 2.4vw, 34px);
           position: relative;
           isolation: isolate;
@@ -345,8 +346,8 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, initialJoinId 
           z-index: 1;
           inset: var(--room-frame-gap);
           margin: auto;
-          width: min(calc(100vw - (var(--room-frame-gap) * 2)), calc((100vh - (var(--room-frame-gap) * 2)) * 1.777778)) !important;
-          height: min(calc(100vh - (var(--room-frame-gap) * 2)), calc((100vw - (var(--room-frame-gap) * 2)) * 0.5625)) !important;
+          width: min(calc(100vw - (var(--room-frame-gap) * 2)), calc((100dvh - (var(--room-frame-gap) * 2)) * 1.777778)) !important;
+          height: min(calc(100dvh - (var(--room-frame-gap) * 2)), calc((100vw - (var(--room-frame-gap) * 2)) * 0.5625)) !important;
           max-width: none !important;
           max-height: none !important;
           min-width: 0 !important;

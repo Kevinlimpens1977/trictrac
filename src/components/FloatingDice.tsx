@@ -150,6 +150,7 @@ export const FloatingDice: React.FC<FloatingDiceProps> = ({ state, onUndo, inter
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
       <div
+        className="hud-cube-row"
         style={{
           display: 'flex',
           gap: 12,
@@ -182,7 +183,7 @@ export const FloatingDice: React.FC<FloatingDiceProps> = ({ state, onUndo, inter
       </div>
 
       {/* Voortgangs-dots: groen = gespeeld */}
-      <div style={{ display: 'flex', gap: 5, justifyContent: 'center', marginTop: 16 }} aria-hidden="true">
+      <div className="hud-dots" style={{ display: 'flex', gap: 5, justifyContent: 'center', marginTop: 16 }} aria-hidden="true">
         {originalSet.map((_, i) => (
           <span
             key={i}
@@ -199,6 +200,7 @@ export const FloatingDice: React.FC<FloatingDiceProps> = ({ state, onUndo, inter
 
       {canUndoAny && (
         <button
+          className="hud-undo-btn"
           onClick={() => onUndo(1)}
           style={{
             minHeight: 44,
