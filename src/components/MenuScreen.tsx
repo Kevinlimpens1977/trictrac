@@ -82,7 +82,7 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
         .menuButtons .menu-btn {
           position: static;
           flex: 1;
-          min-height: max(48px, 7dvh);
+          min-height: 48px;
           padding: 0.5vh 2vh;
         }
         .menuButtons .menu-btn--orange {

@@ -542,6 +542,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '16px',
   },
   modalBtnCancel: {
+    minHeight: '44px',
     padding: '10px 20px',
     background: 'transparent',
     border: '1px solid rgba(255,255,255,0.2)',
@@ -553,6 +554,7 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'all 0.2s',
   },
   modalBtnConfirm: {
+    minHeight: '44px',
     padding: '10px 20px',
     background: 'linear-gradient(135deg, #dc3545, #a71d2a)',
     border: '1px solid #7a151f',

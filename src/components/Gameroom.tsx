@@ -426,8 +426,8 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           right: 12px;
           border: 0;
           border-radius: 999px;
-          width: 36px;
-          height: 36px;
+          width: 44px;
+          height: 44px;
           background: #c92a2a;
           color: #fff;
           font-weight: 900;
@@ -487,7 +487,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
             gap: 8px;
           }
           .gameRoomChoiceButton {
-            min-height: 40px;
+            min-height: 44px;
             font-size: clamp(16px, 5dvh, 22px);
           }
         }
@@ -579,7 +579,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                           />
                           Privé spel
                         </label>
-                        <button onClick={handleHostGame} style={{...styles.btnSupercellBlue, width: '50%', height: '38px', fontSize: '14px'}}>
+                        <button onClick={handleHostGame} style={{...styles.btnSupercellBlue, width: '50%', height: '44px', fontSize: '14px'}}>
                           Host Game
                         </button>
                       </div>
@@ -607,7 +607,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                         style={{...styles.compactInput, width: '60%'}} 
                         placeholder="Privé ID" 
                       />
-                      <button onClick={() => handleJoinGame()} style={{...styles.btnSupercellBlue, width: '38%', height: '38px', fontSize: '12px'}}>
+                      <button onClick={() => handleJoinGame()} style={{...styles.btnSupercellBlue, width: '38%', height: '44px', fontSize: '12px'}}>
                         Join ID
                       </button>
                     </div>
@@ -823,7 +823,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
   },
   btnSupercell: {
-    height: 'clamp(38px, 5.8dvh, 44px)',
+    height: 'clamp(44px, 5.8dvh, 48px)',
+    minHeight: '44px',
     background: 'linear-gradient(180deg, #fbbc05 0%, #e38a04 100%)',
     border: '2px solid #b86200',
     borderRadius: '12px',
@@ -841,7 +842,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
   },
   btnSupercellBlue: {
-    height: 'clamp(38px, 5.8dvh, 44px)',
+    height: 'clamp(44px, 5.8dvh, 48px)',
+    minHeight: '44px',
     background: 'linear-gradient(180deg, #5fc3fa 0%, #1e87d6 100%)',
     border: '2px solid #104e7d',
     borderRadius: '12px',
@@ -859,7 +861,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
   },
   btnSupercellRed: {
-    height: 'clamp(38px, 5.8dvh, 44px)',
+    height: 'clamp(44px, 5.8dvh, 48px)',
+    minHeight: '44px',
     background: 'linear-gradient(180deg, #ff6b6b 0%, #c92a2a 100%)',
     border: '2px solid #861616',
     borderRadius: '12px',
@@ -877,7 +880,9 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
   },
   copyBtn: {
-    padding: '4px 8px',
+    minWidth: '44px',
+    minHeight: '44px',
+    padding: '0 10px',
     background: '#8d6e63',
     color: '#fff',
     border: 'none',
@@ -931,6 +936,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 'clamp(12px, 1.2vw, 14px)',
   },
   btnJoinSmall: {
+    minHeight: '44px',
+    minWidth: '44px',
     background: 'linear-gradient(180deg, #5fc3fa 0%, #1e87d6 100%)',
     border: '1px solid #104e7d',
     borderRadius: '6px',

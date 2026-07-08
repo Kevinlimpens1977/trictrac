@@ -61,7 +61,12 @@ async function expectHitboxReceivesClickInViewport(page: Page, label: string | R
   expect(tapTargetReceivesClick, `${String(label)} should receive taps at its center`).toBe(true);
 }
 
-async function expectMenuHitboxesOnPaintedButtons(page: Page) {
+/**
+ * Sinds de UX-overhaul zijn de menuknoppen échte zichtbare knoppen:
+ * - landscape/desktop: over de ingebakken videoknoppen heen (onderste band van de stage)
+ * - mobiel portret (<=700px): als kolom ONDER de stage, volle breedte
+ */
+async function expectMenuButtonsPlacement(page: Page, viewport: { width: number; height: number }) {
   const stage = page.locator('.videoStage');
   const pvp = page.getByRole('button', { name: 'Start speler tegen speler' });
   const pvc = page.getByRole('button', { name: 'Start speler tegen computer' });
@@ -73,9 +78,22 @@ async function expectMenuHitboxesOnPaintedButtons(page: Page) {
   ]);
 
   expect(stageBox, 'menu stage should have a layout box').not.toBeNull();
-  expect(pvpBox, 'pvp hitbox should have a layout box').not.toBeNull();
-  expect(pvcBox, 'pvc hitbox should have a layout box').not.toBeNull();
+  expect(pvpBox, 'pvp button should have a layout box').not.toBeNull();
+  expect(pvcBox, 'pvc button should have a layout box').not.toBeNull();
   if (!stageBox || !pvpBox || !pvcBox) return;
+
+  const isMobilePortrait = viewport.width <= 700 && viewport.height > viewport.width;
+
+  if (isMobilePortrait) {
+    // Kolom onder de stage, volle breedte, ruim tapbaar
+    for (const [label, box] of [['pvp', pvpBox], ['pvc', pvcBox]] as const) {
+      expect(box.y, `${label} button should sit below the stage`).toBeGreaterThanOrEqual(stageBox.y + stageBox.height - 1);
+      expect(box.width, `${label} button should span the layout width`).toBeGreaterThanOrEqual(stageBox.width * 0.95);
+      expect(box.height, `${label} button should be comfortably tappable`).toBeGreaterThanOrEqual(48);
+    }
+    expect(pvcBox.y, 'pvc below pvp').toBeGreaterThan(pvpBox.y);
+    return;
+  }
 
   const asStagePercent = (box: { x: number; y: number; width: number; height: number }) => ({
     left: (box.x - stageBox.x) / stageBox.width,
@@ -97,10 +115,39 @@ async function expectMenuHitboxesOnPaintedButtons(page: Page) {
   expect(pvcRect.right).toBeLessThanOrEqual(0.87);
 
   for (const [label, rect] of [['pvp', pvpRect], ['pvc', pvcRect]] as const) {
-    expect(rect.top, `${label} hitbox should start on the painted button`).toBeGreaterThanOrEqual(0.84);
-    expect(rect.top, `${label} hitbox should start on the painted button`).toBeLessThanOrEqual(0.88);
-    expect(rect.bottom, `${label} hitbox should end on the painted button`).toBeGreaterThanOrEqual(0.94);
-    expect(rect.bottom, `${label} hitbox should end on the painted button`).toBeLessThanOrEqual(0.98);
+    expect(rect.top, `${label} button should start on the painted band`).toBeGreaterThanOrEqual(0.80);
+    expect(rect.top, `${label} button should start on the painted band`).toBeLessThanOrEqual(0.90);
+    expect(rect.bottom, `${label} button should end on the painted band`).toBeGreaterThanOrEqual(0.92);
+    expect(rect.bottom, `${label} button should end on the painted band`).toBeLessThanOrEqual(1.01);
+  }
+}
+
+/**
+ * Tap-target audit: elke zichtbare knop moet minimaal 44x44 CSS-px zijn
+ * (Apple HIG / WCAG 2.5.5). Allowlist is bewust leeg.
+ */
+async function expectAllVisibleButtons44(page: Page, context: string) {
+  // offsetWidth/offsetHeight: layout-maat, onafhankelijk van transforms
+  // (entry-animaties zoals popIn schalen tijdelijk via transform).
+  const buttons = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('button'))
+      .filter((b) => {
+        const style = window.getComputedStyle(b);
+        return b.offsetWidth > 0 && b.offsetHeight > 0 && style.visibility !== 'hidden';
+      })
+      .map((b) => ({
+        label: (b.getAttribute('aria-label') || b.textContent || '?').trim().slice(0, 40),
+        width: b.offsetWidth,
+        height: b.offsetHeight,
+      }));
+  });
+
+  // 0.5px epsilon: subpixel-rendering kan exact-44px targets als 43.99998 meten
+  const MIN = 43.5;
+  expect(buttons.length, `${context}: at least one visible button expected`).toBeGreaterThan(0);
+  for (const b of buttons) {
+    expect(b.width, `${context}: "${b.label}" should be >=44px wide`).toBeGreaterThanOrEqual(MIN);
+    expect(b.height, `${context}: "${b.label}" should be >=44px tall`).toBeGreaterThanOrEqual(MIN);
   }
 }
 
@@ -157,7 +204,7 @@ for (const viewport of viewports) {
 
     await expectHitboxReceivesClickInViewport(page, 'Start speler tegen speler');
     await expectHitboxReceivesClickInViewport(page, 'Start speler tegen computer');
-    await expectMenuHitboxesOnPaintedButtons(page);
+    await expectMenuButtonsPlacement(page, viewport);
     await expect(page.getByRole('button', { name: 'Speluitleg' })).toHaveCount(0);
   });
 
@@ -248,5 +295,74 @@ for (const viewport of viewports) {
     expect(wrapperStyle.borderTopWidth).toBe('2px');
     expect(Number.parseFloat(wrapperStyle.borderRadius)).toBeGreaterThanOrEqual(18);
     expect(wrapperStyle.overflow).toBe('hidden');
+  });
+}
+
+/* ─── Tap-target audit: alle zichtbare knoppen >=44px op elk kerndevice ─── */
+
+const tapTargetViewports = [
+  { name: 'mobile portrait', width: 375, height: 812 },
+  { name: 'mobile landscape', width: 812, height: 375 },
+  { name: 'desktop', width: 1280, height: 800 },
+];
+
+for (const viewport of tapTargetViewports) {
+  test(`tap targets >=44px on menu (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/?test=1', { waitUntil: 'load' });
+    await expectAllVisibleButtons44(page, 'menu');
+  });
+
+  test(`tap targets >=44px in gameroom flows (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/?test=1&start_gameroom=1', { waitUntil: 'load' });
+
+    await expect(page.getByRole('button', { name: 'Speel op één computer' })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'gameroom lobby');
+
+    // Speluitleg-dialoog (sluitknop)
+    await page.getByRole('button', { name: 'Speluitleg' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expectAllVisibleButtons44(page, 'gameroom help');
+    await page.getByRole('button', { name: 'Sluit speluitleg' }).click();
+
+    // Lokaal spelen (invoer + start/terug)
+    await page.getByRole('button', { name: 'Speel op één computer' }).click();
+    await expect(page.getByRole('button', { name: 'Start Spel' })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'gameroom local');
+
+    // Toss-scherm
+    await page.getByRole('button', { name: 'Start Spel' }).click();
+    await expect(page.getByRole('button', { name: 'Gooi Dobbelstenen' })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'gameroom toss');
+  });
+
+  test(`tap targets >=44px in gameroom online panel (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/?test=1&start_gameroom=1', { waitUntil: 'load' });
+
+    await page.getByRole('button', { name: 'Speel online' }).click();
+    await expect(page.getByRole('button', { name: 'Host Game' })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'gameroom online');
+  });
+
+  test(`tap targets >=44px in game + leave dialog (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/?test=1&start_pva=1', { waitUntil: 'load' });
+
+    await expect(page.getByRole('button', { name: /Gooi Dobbelstenen/ })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'game');
+
+    await page.getByRole('button', { name: /Verlaat spel/i }).click();
+    await expect(page.getByRole('button', { name: 'Annuleren' })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'game leave-dialog');
+  });
+
+  test(`tap targets >=44px on gameover (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/?test=1&start_gameover=1', { waitUntil: 'load' });
+
+    await expect(page.getByRole('button', { name: 'Neem Revanche' })).toBeVisible({ timeout: 10_000 });
+    await expectAllVisibleButtons44(page, 'gameover');
   });
 }
