@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signInAnonymously, GoogleAuthProvider } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signInAnonymously, GoogleAuthProvider } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { auth } from '../firebase';
 import './AuthScreen.css';
@@ -31,6 +31,14 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
       setLoading(false);
     });
 
+    // Terugkomst van de mobiele redirect-flow: fouten zichtbaar maken
+    // (succes loopt vanzelf via onAuthStateChanged hierboven)
+    getRedirectResult(auth).catch((error) => {
+      console.error('Redirect-login mislukt', error);
+      setStatus('Inloggen is niet gelukt. Probeer het opnieuw.');
+      setLoading(false);
+    });
+
     return () => unsubscribe();
   }, [onAuthenticated]);
 
@@ -52,6 +60,19 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
     setLoading(true);
     setStatus('');
     const provider = new GoogleAuthProvider();
+
+    // Op mobiel is signInWithPopup onbetrouwbaar (iOS Safari blokkeert de
+    // terugweg); de redirect-flow met first-party authDomain werkt daar wel.
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      signInWithRedirect(auth, provider).catch((error) => {
+        console.error('Redirect-login starten mislukt', error);
+        setStatus('Er is een fout opgetreden bij het inloggen met Google.');
+        setLoading(false);
+      });
+      return; // de pagina navigeert weg
+    }
+
     signInWithPopup(auth, provider)
       .then((result) => {
         onAuthenticated(result.user);

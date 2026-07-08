@@ -14,6 +14,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,woff2}', 'afbeeldingen/speelbord*', 'icons/*.png'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: 'index.html',
+        // De Firebase auth-handler (/__/auth/*, geproxied via vercel.json)
+        // mag NOOIT door de service worker worden afgevangen
+        navigateFallbackDenylist: [/^\/__\//],
       },
       manifest: {
         name: 'Tric-Trac — het klassieke bordspel',
