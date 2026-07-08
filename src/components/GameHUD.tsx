@@ -62,7 +62,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
         )}
         
         {needsRoll && isWaitingForRemote && (
-          <div style={{ color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', fontSize: '14px', margin: '10px 0' }}>
+          <div style={{ color: '#6d4c33', fontStyle: 'italic', fontSize: '14px', margin: '10px 0' }}>
             Wachten op {actualPlayerName}...
           </div>
         )}
@@ -88,15 +88,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
           onClick={onLeaveGame}
           style={styles.leaveButton}
           onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(220,53,69,0.4)';
+            e.currentTarget.style.background = 'rgba(199, 42, 42, 0.12)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
+            e.currentTarget.style.background = 'transparent';
           }}
         >
-          Verlaat Spel
+          ⏻ Verlaat spel
         </button>
       </div>
     </div>
@@ -223,22 +221,21 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     display: 'flex',
     justifyContent: 'center',
-    paddingTop: '16px',
-    borderTop: '1px solid rgba(255,255,255,0.06)'
+    paddingTop: '8px',
+    borderTop: '1px solid rgba(120, 80, 40, 0.18)'
   },
   leaveButton: {
-    minHeight: '36px',
-    padding: '8px 16px',
-    fontSize: '12px',
-    fontWeight: 600,
-    color: '#fff',
-    background: 'linear-gradient(135deg, #dc3545, #a71d2a)',
-    border: '1px solid #7a151f',
-    borderRadius: '6px',
+    minHeight: '44px',
+    minWidth: '44px',
+    padding: '8px 18px',
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#a3271f',
+    background: 'transparent',
+    border: 'none',
+    borderRadius: '8px',
     cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-    textTransform: 'uppercase',
+    transition: 'background 0.15s ease',
     letterSpacing: 0
   }
 };

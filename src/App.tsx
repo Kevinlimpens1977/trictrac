@@ -396,7 +396,7 @@ function App() {
 
           {/* Inject HUD over the right section of the board */}
           {introPhase === 'game' && !isMobilePortrait && (
-            <div className="board-hud-overlay" style={styles.hudOverlay}>
+            <div className="board-hud-overlay">
               <GameHUD
                 state={state}
                 localPlayer={state.localPlayer}
@@ -481,18 +481,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  hudOverlay: {
-    position: 'absolute',
-    /* Below SPELRESULTAAT header: x 643-905 of 976, y ~145-440 of 509 */
-    left: '66%',
-    top: '28%',
-    width: '26.5%',
-    height: '58%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    pointerEvents: 'auto',
   },
   devPanel: {
     position: 'absolute',
