@@ -55,7 +55,7 @@ const FlightPiece: React.FC<Flight> = ({ player, fx, fy, tx, ty }) => {
         cx={fx}
         cy={fy}
         r={PIECE_RADIUS - 2}
-        fill={isBlack ? '#2a2a2a' : '#f5f0e8'}
+        fill={isBlack ? 'url(#pieceB)' : 'url(#pieceW)'}
         stroke={isBlack ? '#777' : '#c4b99a'}
         strokeWidth={4}
       />
@@ -232,9 +232,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
         touchAction: 'manipulation',
       }}
     >
-      {/* Board image */}
+      {/* Board image — 1x/2x WebP; layoutcoördinaten blijven in 976×509-space */}
       <img
         src="/afbeeldingen/speelbord.png"
+        srcSet="/afbeeldingen/speelbord.webp 1x, /afbeeldingen/speelbord@2x.webp 2x"
         alt="Tric-Trac Speelbord"
         draggable={false}
         style={{
@@ -272,6 +273,19 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
           pointerEvents: 'none',
         }}
       >
+        {/* Materiaal-look voor de stenen (ivoor / ebbenhout) */}
+        <defs>
+          <radialGradient id="pieceB" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stopColor="#4d4d4d" />
+            <stop offset="60%" stopColor="#2a2a2a" />
+            <stop offset="100%" stopColor="#141414" />
+          </radialGradient>
+          <radialGradient id="pieceW" cx="35%" cy="30%" r="75%">
+            <stop offset="0%" stopColor="#fffdf5" />
+            <stop offset="60%" stopColor="#f0e9d8" />
+            <stop offset="100%" stopColor="#d6cbb0" />
+          </radialGradient>
+        </defs>
 
         {/* ── Highlight valid targets (green) ── */}
         {state.validTos.map((ptId) => {
@@ -340,7 +354,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
                   cx={pt.x}
                   cy={cy}
                   r={PIECE_RADIUS - 2}
-                  fill={isBlack ? '#2a2a2a' : '#f5f0e8'}
+                  fill={isBlack ? 'url(#pieceB)' : 'url(#pieceW)'}
                   stroke={isBlack ? '#777' : '#c4b99a'}
                   strokeWidth={4}
                   className="piece-enter"
@@ -364,13 +378,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
           <circle key={`barB-${i}`}
             cx={layout.bar.x} cy={448 - 80 - i * PIECE_DIAMETER}
             r={PIECE_RADIUS - 2}
-            fill="#2a2a2a" stroke="#777" strokeWidth={4} />
+            fill="url(#pieceB)" stroke="#777" strokeWidth={4} />
         ))}
         {state.barW > 0 && Array.from({ length: state.barW }).map((_, i) => (
           <circle key={`barW-${i}`}
             cx={layout.bar.x} cy={448 + 80 + i * PIECE_DIAMETER}
             r={PIECE_RADIUS - 2}
-            fill="#f5f0e8" stroke="#c4b99a" strokeWidth={4} />
+            fill="url(#pieceW)" stroke="#c4b99a" strokeWidth={4} />
         ))}
 
         {/* ── Bear-off counters ── */}
@@ -407,7 +421,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
                   cx={pt.x}
                   cy={cy}
                   r={PIECE_RADIUS - 2}
-                  fill={isBlack ? '#2a2a2a' : '#f5f0e8'}
+                  fill={isBlack ? 'url(#pieceB)' : 'url(#pieceW)'}
                   stroke={isBlack ? '#777' : '#c4b99a'}
                   strokeWidth={4}
                 />
