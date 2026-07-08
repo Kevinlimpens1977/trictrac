@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { GameState } from '../types/GameState';
 import { FloatingDice } from './FloatingDice';
 import { isMuted, toggleMuted } from '../audio/sound';
+import { canBearOff } from '../engine/moveEngine';
 
 interface GameHUDProps {
   state: GameState;
@@ -30,6 +31,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
   const isAITurn = state.mode === 'pva' && state.turn === 'W';
   const isWaitingForRemote = state.mode === 'pvp' && localPlayer && localPlayer !== state.turn;
   const isErrorMsg = /moet eerst|geen geldige|geen zetten|verloren|overgeslagen|geblokkeerd|vol\./i.test(state.msg);
+
+  // 'Automatisch uitspelen' is alleen relevant zodra deze speler alle stenen
+  // in het thuisvak heeft: pva = de mens (zwart), online = eigen kleur,
+  // lokaal gedeeld scherm = wie aan de beurt is.
+  const bearOffPerspective = state.mode === 'pva'
+    ? 'B' as const
+    : ((localPlayer as 'B' | 'W' | undefined) ?? state.turn);
+  const showAutoBearOff = !!onToggleAutoBearOff && canBearOff(state, bearOffPerspective);
 
   return (
     <div 
@@ -116,21 +125,22 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
         </div>
       )}
 
-      {/* Instelling: automatisch uitspelen (bear-off) */}
-      {onToggleAutoBearOff && (
-        <label className="hud-auto-row" style={styles.autoRow}>
-          <input
-            type="checkbox"
-            checked={autoBearOff}
-            onChange={onToggleAutoBearOff}
-            style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#8d6e63' }}
-          />
-          Automatisch uitspelen
-        </label>
-      )}
+      {/* Onderste blok: instelling (alleen in de eindfase) + verlaat-knop */}
+      <div style={styles.bottomBlock}>
+        {showAutoBearOff && (
+          <label className="hud-auto-row" style={styles.autoRow}>
+            <input
+              type="checkbox"
+              checked={autoBearOff}
+              onChange={onToggleAutoBearOff}
+              style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#8d6e63' }}
+            />
+            Automatisch uitspelen
+          </label>
+        )}
 
-      {/* Leave Game Button */}
-      <div className="hud-leave" style={styles.leaveContainer}>
+        {/* Leave Game Button */}
+        <div className="hud-leave" style={styles.leaveContainer}>
         <button
           onClick={onLeaveGame}
           style={styles.leaveButton}
@@ -145,6 +155,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
         >
           ⏻ Verlaat spel
         </button>
+        </div>
       </div>
     </div>
   );
@@ -293,8 +304,14 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     flex: '0 0 auto',
   },
-  autoRow: {
+  bottomBlock: {
     marginTop: 'auto',
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  autoRow: {
     minHeight: '44px',
     display: 'flex',
     alignItems: 'center',
