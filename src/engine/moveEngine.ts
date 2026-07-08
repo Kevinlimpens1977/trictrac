@@ -3,14 +3,15 @@
  *
  * Movement rules:
  * - Black moves 1 → 24, White moves 24 → 1
- * - Legal landing: empty, own stack, opponent blot (hit)
- * - Blocked: 2+ opponent pieces
+ * - Legal landing: empty, own stack with < 5 pieces, opponent blot (hit)
+ * - Blocked: 2+ opponent pieces, OR own point that is full (5 pieces)
+ * - Max 5 pieces per point: with 5 stones is a triangle volledig bezet
  * - Bear-off only when all pieces in home board and bar empty
  *
  * BAR RULE (CRITICAL — overrides all other logic):
  * - If player has ≥1 piece on bar: MUST re-enter first
  * - Must use LOWEST die first for re-entry
- * - If lowest die entry is blocked → ENTIRE TURN FORFEITED
+ * - If lowest die entry is blocked or full → ENTIRE TURN FORFEITED
  * - Cannot use higher die first, cannot skip bar
  */
 
@@ -18,6 +19,8 @@ import type { GameState, Player, PointState } from '../types/GameState';
 
 /* ─── Constants ─── */
 const BEAR_OFF_POINT = 25; // Virtual "off the board" destination
+/** Zelfde limiet als in de setup-fase (setupEngine): vol punt = 5 stenen */
+const MAX_PIECES_PER_POINT = 5;
 
 /* ─── Direction helpers ─── */
 
@@ -51,11 +54,16 @@ export function isBlocked(point: PointState | null, player: Player): boolean {
   return point !== null && point.owner !== player && point.count >= 2;
 }
 
+/** Eigen punt met 5 stenen: volledig bezet, kan niets meer ontvangen */
+export function isFull(point: PointState | null, player: Player): boolean {
+  return point !== null && point.owner === player && point.count >= MAX_PIECES_PER_POINT;
+}
+
 export function canLandOn(state: GameState, pointIndex: number, player: Player): boolean {
   if (pointIndex < 1 || pointIndex > 24) return false;
   const pt = state.points[pointIndex];
   if (!pt) return true; // empty
-  if (pt.owner === player) return true; // own stack
+  if (pt.owner === player) return pt.count < MAX_PIECES_PER_POINT; // own stack, mits niet vol
   if (pt.count === 1) return true; // blot — can hit
   return false; // blocked
 }
@@ -80,13 +88,17 @@ export function resolveBarEntry(
   const player = state.turn;
   const firstDie = dice[0];
   const entryPoint = getEntryPoint(player, firstDie);
+  const entryPt = state.points[entryPoint];
 
-  if (isBlocked(state.points[entryPoint], player)) {
+  if (isBlocked(entryPt, player) || isFull(entryPt, player)) {
+    const reason = isFull(entryPt, player)
+      ? `Punt ${entryPoint} is vol (5 stenen). Verplichte dobbelsteen ${firstDie} kan niet worden gespeeld — beurt verloren!`
+      : `Punt ${entryPoint} is geblokkeerd. Verplichte dobbelsteen ${firstDie} kan niet worden gespeeld — beurt verloren!`;
     return {
       canEnter: false,
       entryPoint,
       forfeited: true,
-      forfeitReason: `Punt ${entryPoint} is geblokkeerd. Verplichte dobbelsteen ${firstDie} kan niet worden gespeeld — beurt verloren!`,
+      forfeitReason: reason,
     };
   }
 
