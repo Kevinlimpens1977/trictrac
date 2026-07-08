@@ -2,6 +2,132 @@ import React from 'react';
 import type { GameState } from '../types/GameState';
 import { Pips } from './Die';
 
+/**
+ * Dobbelsteenweergave in het HUD-paneel (ontwerp "optie 11"):
+ * 3D mini-kubusjes in warme outline-stijl op het geschilderde papier.
+ * - wachtend: outline-kubus
+ * - actief:  groene lijnen + zachte gloed
+ * - gespeeld: vervaagd met gestippelde rand en ↩-badge (tik = terugnemen)
+ * Daaronder voortgangs-dots en een "laatste zet terugnemen"-tekstknop.
+ */
+
+type CubeState = 'used' | 'active' | 'pending';
+
+const CUBE = 38; // px, front-face
+const HALF = CUBE / 2;
+
+const FACE_BASE: React.CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  borderRadius: 6,
+  border: '1.5px solid #6d4c33',
+  background: '#fbf6e8',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backfaceVisibility: 'hidden',
+};
+
+const MiniCube: React.FC<{
+  value: number;
+  state: CubeState;
+  onClick?: () => void;
+  label?: string;
+}> = ({ value, state, onClick, label }) => {
+  const isActive = state === 'active';
+  const isUsed = state === 'used';
+  const border = isActive ? '1.5px solid #2e7d32' : FACE_BASE.border;
+  const pipColor = isActive ? '#2e7d32' : '#6d4c33';
+
+  return (
+    <div
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      aria-label={label}
+      style={{
+        position: 'relative',
+        width: CUBE + 8,
+        height: CUBE + 12,
+        paddingTop: 8,
+        perspective: 500,
+        cursor: onClick ? 'pointer' : 'default',
+        opacity: isUsed ? 0.38 : 1,
+        transition: 'opacity 0.3s ease, transform 0.3s ease',
+        transform: isActive ? 'scale(1.06)' : 'scale(1)',
+        userSelect: 'none',
+        flex: '0 0 auto',
+      }}
+    >
+      <div
+        style={{
+          position: 'relative',
+          width: CUBE,
+          height: CUBE,
+          margin: '0 auto',
+          transformStyle: 'preserve-3d',
+          transform: 'rotateX(-18deg) rotateY(24deg)',
+        }}
+      >
+        {/* front */}
+        <div
+          style={{
+            ...FACE_BASE,
+            border,
+            borderStyle: isUsed ? 'dashed' : 'solid',
+            transform: `translateZ(${HALF}px)`,
+            background: isActive ? 'rgba(76, 175, 80, 0.12)' : FACE_BASE.background,
+            boxShadow: isActive ? '0 0 12px rgba(76, 175, 80, 0.55)' : undefined,
+          }}
+        >
+          <Pips value={value} color={pipColor} size="62%" />
+        </div>
+        {/* top */}
+        <div
+          style={{
+            ...FACE_BASE,
+            border,
+            borderStyle: isUsed ? 'dashed' : 'solid',
+            background: '#f3ecd8',
+            transform: `rotateX(90deg) translateZ(${HALF}px)`,
+          }}
+        />
+        {/* side */}
+        <div
+          style={{
+            ...FACE_BASE,
+            border,
+            borderStyle: isUsed ? 'dashed' : 'solid',
+            background: '#e6dcc0',
+            transform: `rotateY(90deg) translateZ(${HALF}px)`,
+          }}
+        />
+      </div>
+      {isUsed && onClick && (
+        <span
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: -2,
+            width: 18,
+            height: 18,
+            borderRadius: '50%',
+            background: '#f9efd7',
+            border: '1px solid #8d6e63',
+            color: '#5d4433',
+            fontSize: 12,
+            fontWeight: 900,
+            lineHeight: '16px',
+            textAlign: 'center',
+            opacity: 1,
+          }}
+        >
+          ↩
+        </span>
+      )}
+    </div>
+  );
+};
+
 interface FloatingDiceProps {
   state: GameState;
   onUndo: (stepsBack: number) => void;
@@ -21,123 +147,66 @@ export const FloatingDice: React.FC<FloatingDiceProps> = ({ state, onUndo, inter
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-      <div style={{
-        display: 'flex',
-        gap: '10px',
-        background: 'transparent',
-        padding: '6px 0',
-        justifyContent: 'center',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        maxWidth: `${4 * 52 + 3 * 10}px`,
-        margin: '0 auto',
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: 12,
+          justifyContent: 'center',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+          maxWidth: 4 * (CUBE + 8) + 3 * 12,
+          margin: '0 auto',
+        }}
+      >
         {originalSet.map((die, index) => {
-          let status = 'pending';
-          if (index < usedCount) status = 'used';
-          else if (index === usedCount) status = 'active';
-
-          const isClickable = canUndoAny && status === 'used';
-
+          const cubeState: CubeState = index < usedCount ? 'used' : index === usedCount ? 'active' : 'pending';
+          const clickable = canUndoAny && cubeState === 'used';
           return (
-            <div
+            <MiniCube
               key={index}
-              onClick={() => {
-                if (isClickable) {
-                  onUndo(usedCount - index);
-                }
-              }}
-              role={isClickable ? 'button' : undefined}
-              aria-label={isClickable ? `Neem zet met steen ${die} terug` : undefined}
-              style={{
-                width: 52,
-                height: 52,
-                perspective: '1000px',
-                cursor: isClickable ? 'pointer' : 'default',
-                userSelect: 'none',
-              }}
-            >
-              <div style={{
-                width: '100%',
-                height: '100%',
-                position: 'relative',
-                transition: 'transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1)',
-                transformStyle: 'preserve-3d',
-                transform: status === 'used' ? 'rotateY(180deg)' : 'rotateY(0deg)',
-              }}>
-                {/* Front (goud = nog te spelen, groen = actief) */}
-                <div style={{
-                  position: 'absolute',
-                  width: '100%',
-                  height: '100%',
-                  backfaceVisibility: 'hidden',
-                  borderRadius: '50%',
-                  background: status === 'active'
-                    ? 'radial-gradient(circle at 30% 30%, #81c784, #388e3c)'
-                    : 'radial-gradient(circle at 30% 30%, #ffd700, #b8860b)',
-                  border: '2px solid rgba(255,255,255,0.2)',
-                  boxShadow: status === 'active'
-                    ? '0 0 15px rgba(76,175,80,0.8), 0 4px 8px rgba(0,0,0,0.4)'
-                    : '0 4px 8px rgba(0,0,0,0.4)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  <Pips value={die} color="#111" size="55%" />
-                </div>
-                {/* Back (grijs = gespeeld; toont waarde + undo-pijl) */}
-                <div style={{
-                  position: 'absolute',
-                  width: '100%',
-                  height: '100%',
-                  backfaceVisibility: 'hidden',
-                  transform: 'rotateY(180deg)',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle at 30% 30%, #b5b5b5, #6a6a6a)',
-                  border: '1px solid #555',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.4) inset, 0 4px 8px rgba(0,0,0,0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  <Pips value={die} color="#3d3d3d" size="55%" />
-                  {isClickable && (
-                    <span style={{
-                      position: 'absolute',
-                      top: -4,
-                      right: -4,
-                      width: 20,
-                      height: 20,
-                      borderRadius: '50%',
-                      background: '#f9efd7',
-                      border: '1px solid #8d6e63',
-                      color: '#5d4433',
-                      fontSize: 13,
-                      fontWeight: 900,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      lineHeight: 1,
-                    }}>
-                      ↩
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
+              value={die}
+              state={cubeState}
+              onClick={clickable ? () => onUndo(usedCount - index) : undefined}
+              label={clickable ? `Neem zet met steen ${die} terug` : undefined}
+            />
           );
         })}
       </div>
+
+      {/* Voortgangs-dots: groen = gespeeld */}
+      <div style={{ display: 'flex', gap: 5, justifyContent: 'center', marginTop: 6 }} aria-hidden="true">
+        {originalSet.map((_, i) => (
+          <span
+            key={i}
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: i < usedCount ? '#2e7d32' : 'rgba(109, 76, 51, 0.3)',
+              transition: 'background 0.3s ease',
+            }}
+          />
+        ))}
+      </div>
+
       {canUndoAny && (
-        <div style={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: '#6d4c33',
-          textAlign: 'center',
-          lineHeight: 1.3,
-        }}>
-          Tik op een gespeelde steen om de zet terug te nemen
-        </div>
+        <button
+          onClick={() => onUndo(1)}
+          style={{
+            minHeight: 44,
+            minWidth: 44,
+            padding: '2px 12px',
+            border: 'none',
+            background: 'transparent',
+            color: '#8b5e34',
+            fontSize: 11.5,
+            fontWeight: 700,
+            textDecoration: 'underline',
+            cursor: 'pointer',
+          }}
+        >
+          ↩ Laatste zet terugnemen
+        </button>
       )}
     </div>
   );
