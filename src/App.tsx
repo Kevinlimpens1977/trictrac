@@ -54,7 +54,10 @@ function App() {
 
   /* ─── Online PvP: Write state to Firestore ─── */
   useEffect(() => {
-    if (state.mode !== 'pvp' || !state.gameId || state.screen !== 'game') return;
+    if (state.mode !== 'pvp' || !state.gameId) return;
+    // Ook de allerlaatste state (gameover door winst of verlaten) moet
+    // gesynct worden, anders blijft de tegenstander eeuwig wachten.
+    if (state.screen !== 'game' && state.screen !== 'gameover') return;
     if (state.lastUpdateId === lastSyncedUpdateIdRef.current) return;
 
     // Serialize state as JSON string (avoids Firestore nested-array limitations)
@@ -73,6 +76,18 @@ function App() {
     const unsub = onSnapshot(doc(db, 'games', state.gameId), (snapshot) => {
       if (!snapshot.exists()) return;
       const raw = snapshot.data();
+
+      // Tegenstander heeft het spel geannuleerd zonder nieuwe state
+      // (vroeg verlaten of tab gesloten): behandel als verlaten
+      if (
+        raw.status === 'cancelled' &&
+        stateRef.current.screen === 'game' &&
+        (!raw.lastUpdateId || raw.lastUpdateId === stateRef.current.lastUpdateId)
+      ) {
+        const opp: Player = stateRef.current.localPlayer === 'B' ? 'W' : 'B';
+        dispatch({ type: 'ABANDON_GAME', player: opp });
+        return;
+      }
 
       // No stateJson yet (still in lobby phase) or same update
       if (!raw.stateJson || !raw.lastUpdateId) return;
@@ -250,27 +265,47 @@ function App() {
     });
   }, []);
 
-  /* ─── Online turn-timer: 60s per beurt in pvp ─── */
+  /* ─── Online turn-timer: 60s per beurt in pvp ───
+     Gebaseerd op een LOKAAL klok-anker per beurtwissel (immuun voor
+     klokverschil tussen apparaten). Reageert de actieve speler niet
+     (tab dicht, slaapstand), dan neemt de wachtende client de beurt
+     over na een korte gratieperiode — het spel kan nooit meer hangen. */
+  const TURN_SECONDS = (() => {
+    const t = Number(new URLSearchParams(window.location.search).get('turnsecs'));
+    return Number.isFinite(t) && t > 0 ? t : 60; // testhook
+  })();
+  const TAKEOVER_GRACE = Math.max(3, Math.round(TURN_SECONDS / 4));
   const [turnRemaining, setTurnRemaining] = useState<number | null>(null);
+  const turnAnchorRef = useRef(Date.now());
+  useEffect(() => {
+    turnAnchorRef.current = Date.now();
+  }, [state.turn, state.turnStartedAt]);
+
   useEffect(() => {
     if (!(state.mode === 'pvp' && state.gameId && state.screen === 'game')) {
       setTurnRemaining(null);
       return;
     }
-    const TURN_SECONDS = 60;
     const tick = () => {
-      const started = state.turnStartedAt ?? Date.now();
-      const remain = Math.max(0, TURN_SECONDS - Math.floor((Date.now() - started) / 1000));
+      const elapsed = (Date.now() - turnAnchorRef.current) / 1000;
+      const remain = Math.max(0, Math.ceil(TURN_SECONDS - elapsed));
       setTurnRemaining(remain);
-      // Alleen de client van de actieve speler geeft de beurt op
-      if (remain === 0 && state.localPlayer === state.turn && !state.isRolling) {
+
+      const iAmActive = state.localPlayer === state.turn;
+      if (iAmActive && remain === 0 && !state.isRolling) {
         dispatch({ type: 'FORFEIT_TURN', reason: 'Tijd om! Beurt verloren.' });
+        return;
+      }
+      // Actieve speler reageert niet: wachtende client neemt de beurt over
+      if (!iAmActive && state.localPlayer && elapsed > TURN_SECONDS + TAKEOVER_GRACE) {
+        const opp = state.playerNames?.[state.turn] ?? 'Je tegenstander';
+        dispatch({ type: 'FORFEIT_TURN', reason: `${opp} reageerde niet binnen de tijd — jij bent aan de beurt.` });
       }
     };
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [state.mode, state.gameId, state.screen, state.turnStartedAt, state.turn, state.localPlayer, state.isRolling]);
+  }, [state.mode, state.gameId, state.screen, state.turnStartedAt, state.turn, state.localPlayer, state.isRolling, TURN_SECONDS, TAKEOVER_GRACE]);
 
   /* ─── AI loop ─── */
   useEffect(() => {
@@ -450,9 +485,18 @@ function App() {
 
   const confirmLeaveGame = useCallback(() => {
     setShowLeaveConfirm(false);
+    const s = stateRef.current;
+    // Online: markeer het spel als geannuleerd zodat de tegenstander het
+    // direct ziet, ook als de gameover-state-sync hem niet zou bereiken
+    if (s.mode === 'pvp' && s.gameId) {
+      updateDoc(doc(db, 'games', s.gameId), { status: 'cancelled' }).catch(() => {});
+    }
     clearSaves();
-    dispatch({ type: 'ABANDON_GAME', player: state.turn });
-  }, [state.turn, clearSaves]);
+    // De verlater ben IK (online = mijn kleur); alleen bij lokaal spelen op
+    // één scherm is 'wie aan de beurt is' de beste benadering
+    const leaver: Player = (s.mode === 'pvp' && s.gameId && s.localPlayer) ? s.localPlayer : s.turn;
+    dispatch({ type: 'ABANDON_GAME', player: leaver });
+  }, [clearSaves]);
 
   /* ─── Keyboard Listeners ─── */
   const [showDevTools, setShowDevTools] = useState(false);

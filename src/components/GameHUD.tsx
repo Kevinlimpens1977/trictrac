@@ -82,7 +82,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
               role="timer"
               aria-label={`Nog ${turnRemaining} seconden`}
             >
-              {turnRemaining}s
+              {turnRemaining > 0 ? `${turnRemaining}s` : '…'}
             </span>
           )}
         </div>
