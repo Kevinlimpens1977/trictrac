@@ -185,28 +185,38 @@
   max-height: none !important;
 }
 
-/* HUD als echt paneel: eigen papier-look die het geschilderde
-   SPELRESULTAAT-papier in speelbord.png afdekt. Content kan er
-   nooit meer uit vallen (overflow hidden + eigen achtergrond). */
+/* HUD in het geschilderde SPELRESULTAAT-papier: op ruime schermen is de
+   overlay transparant en valt hij exact bínnen het geschilderde kader,
+   onder de geschilderde titel (papier: x 67-93%, y 14-80% van het bord).
+   De dobbelstenen rollen op het bord, dus dit compacte vlak volstaat. */
 .board-hud-overlay {
   position: absolute;
-  left: 65.8%;
-  top: 10%;
-  width: 27%;
-  height: 82%;
+  left: 67.4%;
+  top: 21%;
+  width: 24.9%;
+  height: 58.5%;
   display: flex;
   overflow: hidden;
   box-sizing: border-box;
   pointer-events: auto;
-  background: linear-gradient(180deg, #f9efd7 0%, #f0e0ba 100%);
-  border: 2px solid rgba(140, 100, 55, 0.45);
-  border-radius: 12px;
-  box-shadow: inset 0 0 18px rgba(120, 80, 40, 0.16), 0 4px 10px rgba(0, 0, 0, 0.18);
+  background: transparent;
 }
 
 /* Compacte HUD op smallere schermen (tablet-portret, phone-landscape):
-   het paneel is daar te kort voor de volledige spacing. */
+   het geschilderde papier is daar te klein voor de content, dus krijgt
+   het paneel weer een eigen achtergrond en een ruimere maat. */
 @media (max-width: 1100px) {
+  .board-hud-overlay {
+    left: 65.8%;
+    top: 10%;
+    width: 27%;
+    height: 82%;
+    background: linear-gradient(180deg, #f9efd7 0%, #f0e0ba 100%);
+    border: 2px solid rgba(140, 100, 55, 0.45);
+    border-radius: 12px;
+    box-shadow: inset 0 0 18px rgba(120, 80, 40, 0.16), 0 4px 10px rgba(0, 0, 0, 0.18);
+  }
+
   .board-hud-overlay > div {
     gap: 6px !important;
     padding: 4px 8px !important;
