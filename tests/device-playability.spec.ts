@@ -310,6 +310,33 @@ for (const viewport of viewports) {
   });
 }
 
+/* ─── Regressie: statistieken-chip mag de menuknoppen niet verschuiven ───
+   (de chip rendert alleen bij bestaande stats; verse testprofielen hebben
+   die niet, dus we seeden localStorage vóór het laden) ─── */
+test('menu buttons stay inside the stage when the stats chip renders', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('tt-stats-test-user', JSON.stringify({
+      played: 3, won: 1, lost: 2, doubles: 4, hits: 2, fastestWinMs: 300000,
+    }));
+  });
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.goto('/?test=1', { waitUntil: 'load' });
+
+  await expect(page.locator('.menuStats')).toBeVisible();
+
+  const stage = await page.locator('.videoStage').boundingBox();
+  const chip = await page.locator('.menuStats').boundingBox();
+  const pvp = await page.getByRole('button', { name: 'Start speler tegen speler' }).boundingBox();
+  const pvc = await page.getByRole('button', { name: 'Start speler tegen computer' }).boundingBox();
+  expect(stage).not.toBeNull();
+  if (!stage || !chip || !pvp || !pvc) return;
+
+  for (const [label, box] of [['pvp', pvp], ['pvc', pvc], ['chip', chip]] as const) {
+    expect(box.y + box.height, `${label} should stay inside the stage`).toBeLessThanOrEqual(stage.y + stage.height + 1);
+    expect(box.y, `${label} should start inside the stage`).toBeGreaterThanOrEqual(stage.y - 1);
+  }
+});
+
 /* ─── Tap-target audit: alle zichtbare knoppen >=44px op elk kerndevice ─── */
 
 const tapTargetViewports = [

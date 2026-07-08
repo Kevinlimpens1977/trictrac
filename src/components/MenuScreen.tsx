@@ -56,6 +56,12 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout, caree
           width: min(calc(100vw - (var(--menu-frame-gap) * 2)), calc((100vh - (var(--menu-frame-gap) * 2)) * 1.777778));
         }
 
+        /* Exact stage-grote ankerbox: absolute kinderen (knoppen, chip)
+           rekenen hierdoor altijd t.o.v. de stage zelf */
+        .stageWrap {
+          position: relative;
+        }
+
         /* 16:9 STAGE */
         .videoStage {
           position: relative;
@@ -96,7 +102,10 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout, caree
           box-shadow: 0 0.6vh 0 #b86200, 0 1vh 2vh rgba(0,0,0,0.6);
         }
         .menuStats {
-          margin-top: 10px;
+          position: absolute;
+          top: 3%;
+          right: 2.5%;
+          z-index: 25;
           display: flex;
           justify-content: center;
           gap: 6px;
@@ -108,8 +117,6 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout, caree
           font-weight: 700;
           font-size: 13px;
           width: fit-content;
-          margin-left: auto;
-          margin-right: auto;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .menuButtons .menu-btn--orange:active {
@@ -211,6 +218,10 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout, caree
             min-height: 56px;
             font-size: clamp(18px, 5.5vw, 26px);
           }
+          .menuStats {
+            position: static;
+            margin: 10px auto 0;
+          }
         }
 
         @media (max-height: 520px) {
@@ -226,6 +237,7 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout, caree
       `}</style>
 
       <div className="menuLayout">
+        <div className="stageWrap">
         <div className="videoStage">
           {/* MAIN IDLE VIDEO */}
           <video
@@ -274,6 +286,7 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout, caree
             <span>{career.played} gespeeld</span>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
