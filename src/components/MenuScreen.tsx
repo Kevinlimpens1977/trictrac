@@ -33,17 +33,6 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
             radial-gradient(circle at 82% 16%, rgba(219, 235, 255, 0.7), transparent 34%),
             linear-gradient(135deg, #f8fbff 0%, #edf5ff 44%, #fff9d7 100%);
           overflow: hidden;
-
-          /* --- FINETUNED HITBOX VALUES --- */
-          --pvp-left: 16%;
-          --pvp-top: 86%;
-          --pvp-width: 32%;
-          --pvp-height: 10%;
-
-          --pvc-left: 52.4%;
-          --pvc-top: 86%;
-          --pvc-width: 32%;
-          --pvc-height: 10%;
         }
 
         .startScreen::before {
@@ -58,21 +47,54 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
           pointer-events: none;
         }
 
+        /* LAYOUT WRAPPER: stage + knoppenlaag */
+        .menuLayout {
+          position: relative;
+          z-index: 1;
+          width: min(calc(100vw - (var(--menu-frame-gap) * 2)), calc((100vh - (var(--menu-frame-gap) * 2)) * 1.777778));
+        }
+
         /* 16:9 STAGE */
         .videoStage {
           position: relative;
-          z-index: 1;
           aspect-ratio: 16 / 9;
-          width: min(calc(100vw - (var(--menu-frame-gap) * 2)), calc((100vh - (var(--menu-frame-gap) * 2)) * 1.777778));
-          height: min(calc(100vh - (var(--menu-frame-gap) * 2)), calc((100vw - (var(--menu-frame-gap) * 2)) * 0.5625));
-          max-width: none;
-          max-height: none;
+          width: 100%;
           overflow: hidden;
           border: 2px solid rgb(255, 255, 255);
           border-radius: var(--menu-frame-radius);
           box-sizing: border-box;
           box-shadow: 0 18px 48px rgba(38, 66, 102, 0.28);
           background: #000 url('${fallbackImg}') center/cover no-repeat;
+        }
+
+        /* ZICHTBARE MENUKNOPPEN (dekken de ingebakken videotekst af) */
+        .menuButtons {
+          position: absolute;
+          left: 15%;
+          right: 15%;
+          top: 84.5%;
+          bottom: 2%;
+          z-index: 20;
+          display: flex;
+          gap: 4%;
+          ${DEBUG_HITBOXES ? 'outline: 2px solid red;' : ''}
+        }
+        .menuButtons .menu-btn {
+          position: static;
+          flex: 1;
+          min-height: max(48px, 7dvh);
+          padding: 0.5vh 2vh;
+        }
+        .menuButtons .menu-btn--orange {
+          background: linear-gradient(180deg, #fbbc05 0%, #e38a04 100%);
+          border-color: #b86200;
+          box-shadow: 0 0.6vh 0 #b86200, 0 0.8vh 1.5vh rgba(0,0,0,0.5);
+        }
+        .menuButtons .menu-btn--orange:hover {
+          box-shadow: 0 0.6vh 0 #b86200, 0 1vh 2vh rgba(0,0,0,0.6);
+        }
+        .menuButtons .menu-btn--orange:active {
+          box-shadow: 0 0.2vh 0 #b86200, 0 0.4vh 1vh rgba(0,0,0,0.4);
         }
 
         /* MAIN VIDEO LAYER */
@@ -98,35 +120,6 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
           z-index: 10;
           pointer-events: none;
           transition: opacity 0.3s ease;
-        }
-
-        /* TRANSPARENT HITBOX BUTTONS */
-        .hitboxBtn {
-          position: absolute;
-          pointer-events: auto;
-          background: ${DEBUG_HITBOXES ? 'rgba(255, 0, 0, 0.3)' : 'transparent'};
-          border: ${DEBUG_HITBOXES ? '2px solid red' : 'none'};
-          color: transparent;
-          box-shadow: none;
-          opacity: 1;
-          font-size: 0;
-          overflow: hidden;
-          cursor: pointer;
-          min-height: 0;
-        }
-
-        .hitbox-pvp {
-          left: var(--pvp-left);
-          top: var(--pvp-top);
-          width: var(--pvp-width);
-          height: var(--pvp-height);
-        }
-
-        .hitbox-pvc {
-          left: var(--pvc-left);
-          top: var(--pvc-top);
-          width: var(--pvc-width);
-          height: var(--pvc-height);
         }
 
         /* --- SUPERCELL / CLASH ROYALE STYLE BUTTONS --- */
@@ -179,8 +172,26 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
           box-shadow: 0 0.2vh 0 #8b0000, 0 0.4vh 1vh rgba(0,0,0,0.4);
         }
 
-        @media (orientation: portrait) {
-
+        @media (max-width: 700px) and (orientation: portrait) {
+          .startScreen {
+            align-items: center;
+          }
+          .menuLayout {
+            width: calc(100vw - (var(--menu-frame-gap) * 2));
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+          }
+          .menuButtons {
+            position: static;
+            flex-direction: column;
+            gap: 12px;
+          }
+          .menu-btn {
+            width: 100%;
+            min-height: 56px;
+            font-size: clamp(18px, 5.5vw, 26px);
+          }
         }
 
         @media (max-height: 520px) {
@@ -188,44 +199,54 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
             padding: 1vh 2.6vh;
             font-size: clamp(16px, 4dvh, 24px);
           }
-
+          .menu-btn {
+            min-height: 48px;
+            padding: 0.5vh 2vh;
+          }
         }
       `}</style>
 
-      <div className="videoStage">
-        {/* MAIN IDLE VIDEO */}
-        <video 
-          className={`stageVideo ${loaded ? 'loaded' : ''}`}
-          autoPlay 
-          muted 
-          loop 
-          playsInline 
-          preload="auto"
-          onCanPlay={() => setLoaded(true)}
-        >
-          <source src={videoMp4} type="video/mp4" />
-        </video>
+      <div className="menuLayout">
+        <div className="videoStage">
+          {/* MAIN IDLE VIDEO */}
+          <video
+            className={`stageVideo ${loaded ? 'loaded' : ''}`}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            onCanPlay={() => setLoaded(true)}
+          >
+            <source src={videoMp4} type="video/mp4" />
+          </video>
 
-        <div className="overlayLayer">
-          <button 
-            className="hitboxBtn hitbox-pvp" 
-            aria-label="Start speler tegen speler"
-            onClick={() => onStart('pvp')}
-          />
-          
-          <button 
-            className="hitboxBtn hitbox-pvc" 
-            aria-label="Start speler tegen computer"
-            onClick={() => onStart('pva')}
-          />
-
-          {onLogout && (
-            <button className="btn-supercell logout-btn" onClick={onLogout}>
-              Uitloggen
-            </button>
-          )}
+          <div className="overlayLayer">
+            {onLogout && (
+              <button className="btn-supercell logout-btn" onClick={onLogout}>
+                Uitloggen
+              </button>
+            )}
+          </div>
         </div>
 
+        <div className="menuButtons">
+          <button
+            className="btn-supercell menu-btn menu-btn--orange"
+            aria-label="Start speler tegen speler"
+            onClick={() => onStart('pvp')}
+          >
+            Speler vs Speler
+          </button>
+
+          <button
+            className="btn-supercell menu-btn"
+            aria-label="Start speler tegen computer"
+            onClick={() => onStart('pva')}
+          >
+            Speler vs Computer
+          </button>
+        </div>
       </div>
     </div>
   );
