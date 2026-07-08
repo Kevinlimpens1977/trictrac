@@ -14,7 +14,7 @@ import type { GameMode, Player, GameState } from './types/GameState';
 import { DiceRoller } from './components/DiceRoller';
 import { playPieceMove, playHit, playBearOff, vibrate } from './audio/sound';
 import { db } from './firebase';
-import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import './App.css';
 
 function App() {
@@ -87,6 +87,87 @@ function App() {
 
   const [exitingPieces, setExitingPieces] = useState<{ id: string, player: Player, point: number }[]>([]);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
+  /* ─── Persistentie: savegame (lokaal/pva) + reconnect (online) ─── */
+  type ResumeOffer =
+    | { kind: 'local' }
+    | { kind: 'online'; gameId: string; localPlayer: Player | null };
+  const [resumeOffer, setResumeOffer] = useState<ResumeOffer | null>(() => {
+    if (window.location.search.includes('test=1')) return null;
+    try {
+      const online = localStorage.getItem('tt-online-game');
+      if (online) {
+        const parsed = JSON.parse(online);
+        if (parsed?.gameId) return { kind: 'online', gameId: parsed.gameId, localPlayer: parsed.localPlayer ?? null };
+      }
+      if (localStorage.getItem('tt-savegame')) return { kind: 'local' };
+    } catch { /* corrupte opslag negeren */ }
+    return null;
+  });
+
+  const clearSaves = useCallback(() => {
+    try {
+      localStorage.removeItem('tt-savegame');
+      localStorage.removeItem('tt-online-game');
+    } catch { /* private mode */ }
+  }, []);
+
+  // Autosave: elke state-wijziging tijdens het spelen
+  useEffect(() => {
+    if (state.screen !== 'game') return;
+    try {
+      if (state.mode === 'pvp' && state.gameId) {
+        localStorage.setItem('tt-online-game', JSON.stringify({
+          gameId: state.gameId,
+          localPlayer: state.localPlayer ?? null,
+        }));
+      } else {
+        localStorage.setItem('tt-savegame', JSON.stringify({ ...state, history: [] }));
+      }
+    } catch { /* opslag vol/geblokkeerd is geen spelfout */ }
+  }, [state.lastUpdateId, state.screen, state.mode, state.gameId, state.localPlayer, state]);
+
+  // Opruimen zodra een potje echt klaar is
+  useEffect(() => {
+    if (state.screen === 'gameover') clearSaves();
+  }, [state.screen, clearSaves]);
+
+  const resumeLocal = useCallback(() => {
+    try {
+      const raw = localStorage.getItem('tt-savegame');
+      if (raw) {
+        const saved = JSON.parse(raw) as GameState;
+        dispatch({ type: 'SYNC_STATE', state: { ...saved, history: [] } });
+      }
+    } catch {
+      clearSaves();
+    }
+    setResumeOffer(null);
+  }, [clearSaves]);
+
+  const resumeOnline = useCallback(async (gameId: string, localPlayer: Player | null) => {
+    setResumeOffer(null);
+    try {
+      const snap = await getDoc(doc(db, 'games', gameId));
+      const data = snap.exists() ? snap.data() : null;
+      if (data?.stateJson && data.status === 'playing') {
+        const remote = JSON.parse(data.stateJson) as GameState;
+        dispatch({
+          type: 'SYNC_STATE',
+          state: { ...remote, history: [], localPlayer: localPlayer ?? undefined },
+        });
+        return;
+      }
+    } catch (e) {
+      console.error('[Reconnect] mislukt:', e);
+    }
+    clearSaves(); // potje bestaat niet meer
+  }, [clearSaves]);
+
+  const declineResume = useCallback(() => {
+    clearSaves();
+    setResumeOffer(null);
+  }, [clearSaves]);
 
   /* Reageer op expliciete bord-events uit de reducer (geen state-diffing
      meer: een hit kan zo nooit meer als bear-off worden gelezen). */
@@ -310,8 +391,9 @@ function App() {
 
   const confirmLeaveGame = useCallback(() => {
     setShowLeaveConfirm(false);
+    clearSaves();
     dispatch({ type: 'ABANDON_GAME', player: state.turn });
-  }, [state.turn]);
+  }, [state.turn, clearSaves]);
 
   /* ─── Keyboard Listeners ─── */
   const [showDevTools, setShowDevTools] = useState(false);
@@ -366,7 +448,36 @@ function App() {
   }
 
   if (state.screen === 'menu') {
-    return <MenuScreen onStart={handleStart} />;
+    return (
+      <>
+        <MenuScreen onStart={handleStart} />
+        {resumeOffer && (
+          <div style={{ ...styles.modalOverlay, position: 'fixed' }}>
+            <div style={styles.modalContent}>
+              <h2 style={styles.modalTitle}>Potje hervatten?</h2>
+              <p style={styles.modalText}>
+                {resumeOffer.kind === 'online'
+                  ? `Je was nog verbonden met online potje ${resumeOffer.gameId}. Opnieuw verbinden?`
+                  : 'Er staat nog een onafgemaakt potje klaar. Wil je verdergaan waar je was gebleven?'}
+              </p>
+              <div style={styles.modalActions}>
+                <button style={styles.modalBtnCancel} onClick={declineResume}>
+                  Nieuw spel
+                </button>
+                <button
+                  style={{ ...styles.modalBtnConfirm, background: 'linear-gradient(135deg, #4caf50, #2e7d32)', border: '1px solid #1b5e20' }}
+                  onClick={() => resumeOffer.kind === 'online'
+                    ? resumeOnline(resumeOffer.gameId, resumeOffer.localPlayer)
+                    : resumeLocal()}
+                >
+                  Hervatten
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
   }
 
   if (state.screen === 'gameroom') {

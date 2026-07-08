@@ -114,7 +114,9 @@ function handleEndOfActions(state: GameState): GameState {
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   if (action.type === 'SYNC_STATE') {
-    return { ...action.state, localPlayer: state.localPlayer };
+    // Huidige localPlayer wint (normale pvp-sync); bij een reconnect vanuit
+    // het menu is die nog leeg en nemen we hem uit de herstelde state.
+    return { ...action.state, localPlayer: state.localPlayer ?? action.state.localPlayer };
   }
 
   const newState = baseGameReducer(state, action);
