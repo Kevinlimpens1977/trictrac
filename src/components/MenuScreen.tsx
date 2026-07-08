@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import videoMp4 from '../assets/homevideo5s.mp4';
 import fallbackImg from '../assets/trictrachome.png';
+import type { PlayerStats } from '../stats';
 
 const DEBUG_HITBOXES = false;
 
 interface MenuScreenProps {
   onStart: (mode: 'pvp' | 'pva') => void;
   onLogout?: () => void;
+  career?: PlayerStats | null;
 }
 
-export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => {
+export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout, career }) => {
   const [loaded, setLoaded] = useState(false);
 
   return (
@@ -92,6 +94,23 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
         }
         .menuButtons .menu-btn--orange:hover {
           box-shadow: 0 0.6vh 0 #b86200, 0 1vh 2vh rgba(0,0,0,0.6);
+        }
+        .menuStats {
+          margin-top: 10px;
+          display: flex;
+          justify-content: center;
+          gap: 6px;
+          padding: 6px 14px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.82);
+          border: 1px solid rgba(96, 58, 22, 0.25);
+          color: #4e342e;
+          font-weight: 700;
+          font-size: 13px;
+          width: fit-content;
+          margin-left: auto;
+          margin-right: auto;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         .menuButtons .menu-btn--orange:active {
           box-shadow: 0 0.2vh 0 #b86200, 0 0.4vh 1vh rgba(0,0,0,0.4);
@@ -247,6 +266,14 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
             Speler vs Computer
           </button>
         </div>
+
+        {career && career.played > 0 && (
+          <div className="menuStats" aria-label="Jouw statistieken">
+            <span>🏆 {career.won} gewonnen</span>
+            <span>·</span>
+            <span>{career.played} gespeeld</span>
+          </div>
+        )}
       </div>
     </div>
   );

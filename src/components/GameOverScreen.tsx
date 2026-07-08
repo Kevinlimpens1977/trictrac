@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { Player } from '../types/GameState';
+import type { PlayerStats } from '../stats';
 import confetti from 'canvas-confetti';
 
 interface GameOverScreenProps {
@@ -10,9 +11,10 @@ interface GameOverScreenProps {
     borneOff: { B: number; W: number };
   };
   onRestart: () => void;
+  career?: PlayerStats | null;
 }
 
-export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, stats, onRestart }) => {
+export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, stats, onRestart, career }) => {
   const isBlack = winner === 'B';
   const name = isBlack ? 'ZWART' : 'WIT';
   const accent = isBlack ? '#1a1a1a' : '#f5f0e8';
@@ -113,6 +115,13 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, stats, o
           </div>
         )}
 
+        {career && career.played > 0 && (
+          <p style={styles.careerLine}>
+            Jouw totaal: {career.played} {career.played === 1 ? 'potje' : 'potjes'} · {career.won} gewonnen
+            {career.fastestWinMs != null && ` · snelste winst ${Math.max(1, Math.round(career.fastestWinMs / 60000))} min`}
+          </p>
+        )}
+
         <div style={styles.divider} />
 
         <button
@@ -172,6 +181,11 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'rgba(255,255,255,0.6)',
     margin: '0 0 32px 0',
     fontStyle: 'italic',
+  },
+  careerLine: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: '13px',
+    margin: '0 0 20px 0',
   },
   divider: {
     width: '100px',

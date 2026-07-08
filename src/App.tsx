@@ -13,6 +13,7 @@ import { isPlayerSetupDone } from './engine/setupEngine';
 import type { GameMode, Player, GameState } from './types/GameState';
 import { DiceRoller } from './components/DiceRoller';
 import { Coach } from './components/Coach';
+import { loadStats, recordGame, type PlayerStats } from './stats';
 import { playPieceMove, playHit, playBearOff, vibrate } from './audio/sound';
 import { db } from './firebase';
 import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
@@ -132,6 +133,34 @@ function App() {
   useEffect(() => {
     if (state.screen === 'gameover') clearSaves();
   }, [state.screen, clearSaves]);
+
+  /* ─── Carrière-statistieken per gebruiker ─── */
+  const [career, setCareer] = useState<PlayerStats | null>(() => (user ? loadStats(user.uid) : null));
+  const gameStartRef = useRef<number>(Date.now());
+  const recordedRef = useRef(false);
+
+  useEffect(() => {
+    if (state.screen === 'game') {
+      gameStartRef.current = Date.now();
+      recordedRef.current = false;
+    }
+    if (state.screen === 'gameover' && state.winner && user && !recordedRef.current) {
+      recordedRef.current = true;
+      // Perspectief van deze gebruiker: pva = zwart; online = localPlayer;
+      // lokaal 2-spelers potje heeft geen eigen perspectief.
+      let me: Player | null = null;
+      if (state.mode === 'pva') me = 'B';
+      else if (state.gameId && state.localPlayer) me = state.localPlayer;
+
+      const updated = recordGame(user.uid, {
+        won: me ? state.winner === me : null,
+        doubles: me ? state.stats.doubles[me] : 0,
+        hits: me ? state.stats.hits[me] : 0,
+        durationMs: Date.now() - gameStartRef.current,
+      });
+      setCareer(updated);
+    }
+  }, [state.screen, state.winner, state.mode, state.gameId, state.localPlayer, state.stats, user]);
 
   const resumeLocal = useCallback(() => {
     try {
@@ -510,7 +539,7 @@ function App() {
   if (state.screen === 'menu') {
     return (
       <>
-        <MenuScreen onStart={handleStart} />
+        <MenuScreen onStart={handleStart} career={career} />
         {resumeOffer && (
           <div style={{ ...styles.modalOverlay, position: 'fixed' }}>
             <div style={styles.modalContent}>
@@ -652,7 +681,7 @@ function App() {
       {introPhase === 'game' && state.screen === 'game' && <Coach state={state} />}
 
       {state.screen === 'gameover' && state.winner && (
-        <GameOverScreen winner={state.winner} stats={state.stats} onRestart={handleRestart} />
+        <GameOverScreen winner={state.winner} stats={state.stats} onRestart={handleRestart} career={career} />
       )}
 
       {showLeaveConfirm && (
