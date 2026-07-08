@@ -17,6 +17,8 @@ import {
   switchTurn,
   checkWinner,
   getBarCount,
+  getHomeRange,
+  canBearOff,
   resolveBarEntry,
   getValidMoves,
   executeMove,
@@ -314,11 +316,16 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
 
       const moves = getValidMoves(state, action.point, state.remainingDice);
       if (moves.length === 0) {
+        // Specifieke uitleg voor de eindvak-regel: binnen = vast
+        const [homeStart, homeEnd] = getHomeRange(player);
+        const frozenInHome = action.point >= homeStart && action.point <= homeEnd && !canBearOff(state, player);
         return {
           ...state,
           selected: action.point,
           validTos: [],
-          msg: `Geen geldige zetten vanaf punt ${action.point}.`,
+          msg: frozenInHome
+            ? 'Deze steen staat in je eindvak en staat vast tot het uitspelen.'
+            : `Geen geldige zetten vanaf punt ${action.point}.`,
         };
       }
 

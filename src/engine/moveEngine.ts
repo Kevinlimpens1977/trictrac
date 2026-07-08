@@ -193,6 +193,14 @@ export function getValidMoves(
     return valid;
   }
 
+  // Eindvak-regel: een steen die het thuisvak heeft bereikt staat VAST.
+  // Hij mag niet meer binnen het eindvak verplaatst worden; pas als alle
+  // stenen binnen zijn wordt hij uitgespeeld (het canBearOff-blok hierboven).
+  const [homeStart, homeEnd] = getHomeRange(player);
+  if (from >= homeStart && from <= homeEnd) {
+    return [];
+  }
+
   const dest = getDestination(player, from, die);
 
   // Normal move
