@@ -114,6 +114,35 @@ export function playBearOff() {
   } catch { /* audio niet kritiek */ }
 }
 
+/** Toon met vaste frequentie en nette envelope (voor melodietjes) */
+function tone(c: AudioContext, time: number, freq: number, duration: number, vol = 0.08) {
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(freq, time);
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.exponentialRampToValueAtTime(vol, time + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+  osc.connect(gain);
+  gain.connect(c.destination);
+  osc.start(time);
+  osc.stop(time + duration);
+}
+
+/** Korte overwinningsfanfare (game over) */
+export function playVictory() {
+  if (muted) return;
+  const c = ensureCtx();
+  if (!c) return;
+  try {
+    const now = c.currentTime;
+    tone(c, now, 523.25, 0.28);        // C5
+    tone(c, now + 0.13, 659.25, 0.28); // E5
+    tone(c, now + 0.26, 783.99, 0.30); // G5
+    tone(c, now + 0.42, 1046.5, 0.55, 0.1); // C6
+  } catch { /* audio niet kritiek */ }
+}
+
 /** Zacht twee-tonig pingetje: chatbericht ontvangen */
 export function playChatPing() {
   if (muted) return;
