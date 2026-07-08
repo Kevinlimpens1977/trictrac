@@ -109,7 +109,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: '"Inter", sans-serif',
   },
   card: {
-    padding: '28px',
+    padding: '14px 24px',
     borderRadius: '22px',
     boxShadow: '0 16px 40px rgba(0,0,0,0.22)',
     width: 'auto',
@@ -121,7 +121,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '20px',
+    gap: '8px',
   },
   loadingText: {
     color: '#5c3a21',
@@ -134,7 +134,8 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     gap: '12px',
     width: '100%',
-    padding: '14px 24px',
+    minHeight: '44px',
+    padding: '8px 24px',
     borderRadius: '12px',
     border: '2px solid rgba(0,0,0,0.1)',
     background: '#ffffff',
@@ -148,7 +149,7 @@ const styles: Record<string, React.CSSProperties> = {
   guestButton: {
     width: '100%',
     minHeight: '44px',
-    padding: '10px 24px',
+    padding: '4px 24px',
     borderRadius: '12px',
     border: '2px dashed rgba(0,0,0,0.25)',
     background: 'transparent',

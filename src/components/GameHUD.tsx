@@ -44,7 +44,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
             background: turnColor, border: `3px solid ${turnBorder}`,
             boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
           }} />
-          <span style={styles.turnLabel}>{turnLabelText}</span>
+          <span className="hud-turn-label" style={styles.turnLabel}>{turnLabelText}</span>
           {turnRemaining != null && turnRemaining <= 20 && (
             <span
               style={{
@@ -103,7 +103,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
         )}
         
         {/* Speelbare dobbeltokens (worp-animatie staat op het bord) */}
-        <div style={styles.diceContainer}>
+        <div className="hud-dice-container" style={styles.diceContainer}>
           <FloatingDice state={state} onUndo={onUndo} interactive={!isWaitingForRemote} />
         </div>
       </div>
@@ -118,7 +118,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
 
       {/* Instelling: automatisch uitspelen (bear-off) */}
       {onToggleAutoBearOff && (
-        <label style={styles.autoRow}>
+        <label className="hud-auto-row" style={styles.autoRow}>
           <input
             type="checkbox"
             checked={autoBearOff}
@@ -130,7 +130,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
       )}
 
       {/* Leave Game Button */}
-      <div style={styles.leaveContainer}>
+      <div className="hud-leave" style={styles.leaveContainer}>
         <button
           onClick={onLeaveGame}
           style={styles.leaveButton}
