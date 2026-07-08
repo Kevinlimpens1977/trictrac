@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, setDoc, getDoc, onSnapshot, updateDoc, collection, query, where } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot, updateDoc, collection, query, where, orderBy, limit } from 'firebase/firestore';
 import type { GameMode, Player } from '../types/GameState';
 import { Die } from './Die';
 
@@ -11,6 +11,13 @@ interface GameroomProps {
 
 type RoomState = 'lobby' | 'toss';
 type LobbyMode = 'menu' | 'local' | 'online';
+
+/** "zojuist" / "3 min geleden" voor de lobby-lijst */
+function waitingLabel(createdAt?: number): string {
+  if (!createdAt) return 'wachtend';
+  const mins = Math.max(0, Math.round((Date.now() - createdAt) / 60000));
+  return mins === 0 ? 'zojuist' : `${mins} min geleden`;
+}
 
 export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
   const [roomState, setRoomState] = useState<RoomState>('lobby');
@@ -44,25 +51,52 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
     }
   }, [roomState, gameId]);
 
-  // Listen for open public games
+  // Listen for open public games — gefilterd, gesorteerd en begrensd zodat
+  // verlaten games de lobby niet vervuilen en de lijst klein blijft.
   useEffect(() => {
-    if (roomState === 'lobby') {
-      const q = query(
-        collection(db, 'games'), 
-        where('status', '==', 'waiting')
+    if (roomState !== 'lobby') return;
+
+    const cutoff = Date.now() - 30 * 60 * 1000; // max 30 min oud
+    const mapDocs = (snapshot: { docs: { id: string; data: () => Record<string, unknown> }[] }) =>
+      snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() } as any))
+        .filter((g: any) => !g.isPrivate && (g.createdAt ?? 0) > cutoff)
+        .sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+        .slice(0, 20);
+
+    const holder: { unsub: () => void } = { unsub: () => {} };
+
+    const fancy = query(
+      collection(db, 'games'),
+      where('status', '==', 'waiting'),
+      where('isPrivate', '==', false),
+      where('createdAt', '>', cutoff),
+      orderBy('createdAt', 'desc'),
+      limit(20)
+    );
+
+    holder.unsub = onSnapshot(fancy, (snap) => setOpenGames(mapDocs(snap)), (err) => {
+      // Composite index ontbreekt? Firestore logt de aanmaak-URL in deze error.
+      console.warn('[Lobby] Samengestelde query faalde, val terug op simpele query:', err.message);
+      holder.unsub = onSnapshot(
+        query(collection(db, 'games'), where('status', '==', 'waiting'), limit(50)),
+        (snap) => setOpenGames(mapDocs(snap)),
+        (e) => console.error('[Lobby] Fallback-query faalde:', e)
       );
-      const unsub = onSnapshot(q, (snapshot) => {
-        const gamesList = snapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
-          .filter((game: any) => !game.isPrivate);
-        setOpenGames(gamesList);
-      });
-      return () => unsub();
-    }
+    });
+
+    return () => holder.unsub();
   }, [roomState]);
+
+  // Host sluit de tab tijdens het wachten: game best-effort annuleren
+  useEffect(() => {
+    if (!(isWaiting && isHost && isOnlineMode && gameId)) return;
+    const cancel = () => {
+      updateDoc(doc(db, 'games', gameId), { status: 'cancelled' }).catch(() => {});
+    };
+    window.addEventListener('beforeunload', cancel);
+    return () => window.removeEventListener('beforeunload', cancel);
+  }, [isWaiting, isHost, isOnlineMode, gameId]);
 
   // Firebase listener for host waiting for guest
   useEffect(() => {
@@ -618,7 +652,10 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                       ) : (
                         openGames.map(game => (
                           <div key={game.id} style={styles.gameListItem}>
-                            <span style={styles.gameListName}>{game.player1 || 'Anoniem'}'s game</span>
+                            <span style={styles.gameListName}>
+                              {game.player1 || 'Anoniem'}'s game
+                              <span style={styles.gameListAge}> · {waitingLabel(game.createdAt)}</span>
+                            </span>
                             <button onClick={() => handleJoinGame(game.id)} style={styles.btnJoinSmall}>Join</button>
                           </div>
                         ))
@@ -869,6 +906,12 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#3e2723',
     fontWeight: 'bold',
     fontSize: 'clamp(12px, 1.2vw, 14px)',
+  },
+  gameListAge: {
+    color: '#8d6e63',
+    fontWeight: 'normal',
+    fontStyle: 'italic',
+    fontSize: '11px',
   },
   btnJoinSmall: {
     minHeight: '44px',
