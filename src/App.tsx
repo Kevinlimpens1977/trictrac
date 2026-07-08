@@ -297,6 +297,13 @@ function App() {
   const [isMobilePortrait, setIsMobilePortrait] = useState(() => {
     return window.matchMedia('(max-width: 700px) and (orientation: portrait)').matches;
   });
+  const [showRotateHint, setShowRotateHint] = useState(() => {
+    try { return sessionStorage.getItem('tt-rotate-hint') !== '1'; } catch { return true; }
+  });
+  const dismissRotateHint = useCallback(() => {
+    setShowRotateHint(false);
+    try { sessionStorage.setItem('tt-rotate-hint', '1'); } catch { /* private mode */ }
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -347,6 +354,15 @@ function App() {
           <button onClick={() => dispatch({ type: 'DEV_ENDGAME_SCENARIO' })} style={styles.devBtn}>DEV: Endgame Test</button>
           <button onClick={() => dispatch({ type: 'DEV_ENDGAME_3' })} style={styles.devBtn}>DEV: Endgame (3 stn)</button>
           <button onClick={() => dispatch({ type: 'DEV_ENDGAME_1' })} style={styles.devBtn}>DEV: Endgame (1 stn)</button>
+        </div>
+      )}
+
+      {introPhase === 'game' && isMobilePortrait && showRotateHint && (
+        <div className="rotate-hint" role="status">
+          <span>🔄 Draai je telefoon voor een groter bord</span>
+          <button className="rotate-hint-close" onClick={dismissRotateHint} aria-label="Sluit tip">
+            ✕
+          </button>
         </div>
       )}
 
