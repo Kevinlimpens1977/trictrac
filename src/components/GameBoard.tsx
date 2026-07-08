@@ -45,23 +45,26 @@ function getPieceY(isTop: boolean, index: number, count: number): number {
 }
 
 /**
- * Given a click at (px, py) in image-pixel space,
- * find which point ID was clicked (or -1 for bar, 0 for none).
+ * Given a tap at (px, py) in image-pixel space,
+ * find which point ID was hit (or the bar, or none).
+ * Zones are wider than the painted triangles and lopen door tot voorbij de
+ * basis/punt, zodat ook op kleine schermen elke tik raak is.
  */
 function hitTest(px: number, py: number): { type: 'point' | 'bar' | 'none'; id: number } {
   const layout = BOARD_LAYOUT;
-  const triH = BOTTOM_BASE - BOTTOM_TIP;
-  const halfW = 18;
+  const halfW = 20; // volle driehoekbreedte (~40.5px image-space)
+  const barHalfW = 20; // bar-zone verbreed van 12 naar 40px voor touch
 
   // Check bar
-  if (Math.abs(px - layout.bar.x) < layout.bar.w / 2 && Math.abs(py - layout.bar.y) < layout.bar.h / 2) {
+  if (Math.abs(px - layout.bar.x) < barHalfW && Math.abs(py - layout.bar.y) < layout.bar.h / 2) {
     return { type: 'bar', id: 0 };
   }
 
-  // Check points
+  // Check points (verticale marge boven basis en voorbij de punt)
   for (const pt of layout.points) {
-    const rectY = pt.isTop ? pt.yBase : pt.yBase - triH;
-    if (px >= pt.x - halfW && px <= pt.x + halfW && py >= rectY && py <= rectY + triH) {
+    const yMin = pt.isTop ? TOP_BASE - 10 : BOTTOM_TIP - 20;
+    const yMax = pt.isTop ? TOP_TIP + 20 : BOTTOM_BASE + 10;
+    if (px >= pt.x - halfW && px <= pt.x + halfW && py >= yMin && py <= yMax) {
       return { type: 'point', id: pt.id };
     }
   }
@@ -80,13 +83,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
   const isBearOff = canBearOff(state, state.turn);
   const triH = BOTTOM_BASE - BOTTOM_TIP;
 
-  /** Convert browser click to image-pixel coordinates and dispatch */
-  const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  /** Convert pointer-up to image-pixel coordinates and dispatch */
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const el = containerRef.current;
     if (!el) return;
 
     const rect = el.getBoundingClientRect();
-    // Click position relative to container (0-1)
+    // Tap position relative to container (0-1)
     const relX = (e.clientX - rect.left) / rect.width;
     const relY = (e.clientY - rect.top) / rect.height;
 
@@ -94,20 +97,39 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
     const px = relX * IMG_W;
     const py = relY * IMG_H;
 
-    const hit = hitTest(px, py);
+    let hit = hitTest(px, py);
+
+    // Touch-slop: net naast alles getikt? Kies het dichtstbijzijnde relevante
+    // punt (eigen steen of geldige bestemming) binnen 30 image-px.
+    if (hit.type === 'none') {
+      const s = state;
+      let best: { id: number; d: number } | null = null;
+      for (const pt of BOARD_LAYOUT.points) {
+        const yMin = pt.isTop ? TOP_BASE : BOTTOM_TIP;
+        const yMax = pt.isTop ? TOP_TIP : BOTTOM_BASE;
+        const dy = py < yMin ? yMin - py : py > yMax ? py - yMax : 0;
+        const dx = Math.abs(px - pt.x);
+        const d = Math.hypot(dx, dy);
+        if (d > 30) continue;
+        const ps = s.points[pt.id];
+        const relevant = s.validTos.includes(pt.id) || (ps !== null && ps.owner === s.turn);
+        if (relevant && (!best || d < best.d)) best = { id: pt.id, d };
+      }
+      if (best) hit = { type: 'point', id: best.id };
+    }
 
     if (hit.type === 'point') {
       onPointClick(hit.id);
     } else if (hit.type === 'bar') {
       onBarClick();
     }
-  }, [onPointClick, onBarClick]);
+  }, [onPointClick, onBarClick, state]);
 
   return (
     <div
       className="game-board"
       ref={containerRef}
-      onClick={handleClick}
+      onPointerUp={handlePointerUp}
       style={{
         position: 'relative',
         width: '100%',
@@ -117,6 +139,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
         aspectRatio: `${layout.aspectRatio}`,
         margin: '0 auto',
         cursor: 'pointer',
+        touchAction: 'manipulation',
       }}
     >
       {/* Board image */}
