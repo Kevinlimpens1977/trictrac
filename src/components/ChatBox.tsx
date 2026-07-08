@@ -155,6 +155,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ gameId, localPlayer, opponentN
       )}
 
       <button
+        className={!open && unread > 0 ? 'chat-fab chat-fab--alert' : 'chat-fab'}
         style={{
           ...styles.fab,
           background: open
@@ -176,21 +177,19 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ gameId, localPlayer, opponentN
 
 const styles: Record<string, React.CSSProperties> = {
   fab: {
-    position: 'fixed',
-    right: 'max(14px, env(safe-area-inset-right, 0px))',
-    bottom: 'max(14px, env(safe-area-inset-bottom, 0px))',
-    zIndex: 600,
-    width: 52,
-    height: 52,
+    position: 'relative',
+    flex: '0 0 auto',
+    width: 44,
+    height: 44,
     borderRadius: '50%',
     border: '2px solid #104e7d',
     color: '#fff',
-    fontSize: 22,
+    fontSize: 19,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 4px 0 rgba(0,0,0,0.25), 0 8px 18px rgba(0,0,0,0.35)',
+    boxShadow: '0 3px 0 rgba(0,0,0,0.2), 0 5px 12px rgba(0,0,0,0.3)',
   },
   badge: {
     position: 'absolute',

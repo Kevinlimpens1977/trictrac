@@ -3,6 +3,7 @@ import type { GameState } from '../types/GameState';
 import { FloatingDice } from './FloatingDice';
 import { isMuted, toggleMuted } from '../audio/sound';
 import { canBearOff } from '../engine/moveEngine';
+import { ChatBox } from './ChatBox';
 
 interface GameHUDProps {
   state: GameState;
@@ -170,7 +171,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
           </label>
         )}
 
-        {/* Leave Game Button */}
+        {/* Verlaat-knop + (online) chatknop */}
         <div className="hud-leave" style={styles.leaveContainer}>
         <button
           onClick={onLeaveGame}
@@ -186,6 +187,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
         >
           ⏻ Verlaat spel
         </button>
+        {state.mode === 'pvp' && state.gameId && localPlayer && (
+          <ChatBox
+            gameId={state.gameId}
+            localPlayer={localPlayer as 'B' | 'W'}
+            opponentName={state.playerNames[(localPlayer === 'B' ? 'W' : 'B') as 'B' | 'W']}
+          />
+        )}
         </div>
       </div>
     </div>
@@ -357,7 +365,9 @@ const styles: Record<string, React.CSSProperties> = {
   leaveContainer: {
     width: '100%',
     display: 'flex',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: '10px',
     paddingTop: '8px',
     borderTop: '1px solid rgba(120, 80, 40, 0.18)'
   },

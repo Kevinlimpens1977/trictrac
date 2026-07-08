@@ -13,7 +13,6 @@ import { isPlayerSetupDone } from './engine/setupEngine';
 import type { GameMode, Player, GameState } from './types/GameState';
 import { DiceRoller } from './components/DiceRoller';
 import { Coach } from './components/Coach';
-import { ChatBox } from './components/ChatBox';
 import { loadStats, recordGame, type PlayerStats } from './stats';
 import { playPieceMove, playHit, playBearOff, vibrate } from './audio/sound';
 import { db } from './firebase';
@@ -770,13 +769,6 @@ function App() {
       
       {introPhase === 'game' && state.screen === 'game' && <Coach state={state} />}
 
-      {state.mode === 'pvp' && state.gameId && state.localPlayer && state.screen === 'game' && (
-        <ChatBox
-          gameId={state.gameId}
-          localPlayer={state.localPlayer}
-          opponentName={state.playerNames[state.localPlayer === 'B' ? 'W' : 'B']}
-        />
-      )}
 
       {state.screen === 'gameover' && state.winner && (
         <GameOverScreen winner={state.winner} stats={state.stats} onRestart={handleRestart} career={career} />
