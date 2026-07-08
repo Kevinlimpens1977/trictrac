@@ -161,13 +161,19 @@ export const FloatingDice: React.FC<FloatingDiceProps> = ({ state, onUndo, inter
         {originalSet.map((die, index) => {
           const cubeState: CubeState = index < usedCount ? 'used' : index === usedCount ? 'active' : 'pending';
           const clickable = canUndoAny && cubeState === 'used';
+          // Tik op een eerdere steen = alle zetten t/m die steen terugnemen
+          const stepsBack = usedCount - index;
           return (
             <MiniCube
               key={index}
               value={die}
               state={cubeState}
-              onClick={clickable ? () => onUndo(usedCount - index) : undefined}
-              label={clickable ? `Neem zet met steen ${die} terug` : undefined}
+              onClick={clickable ? () => onUndo(stepsBack) : undefined}
+              label={clickable
+                ? (stepsBack === 1
+                  ? `Neem de zet met steen ${die} terug`
+                  : `Neem ${stepsBack} zetten terug, tot en met steen ${die}`)
+                : undefined}
             />
           );
         })}
@@ -195,14 +201,29 @@ export const FloatingDice: React.FC<FloatingDiceProps> = ({ state, onUndo, inter
           style={{
             minHeight: 44,
             minWidth: 44,
-            padding: '2px 12px',
-            border: 'none',
-            background: 'transparent',
-            color: '#8b5e34',
-            fontSize: 11.5,
-            fontWeight: 700,
-            textDecoration: 'underline',
+            marginTop: 6,
+            padding: '8px 16px',
+            borderRadius: 10,
+            border: '1.5px solid #8d6e63',
+            background: 'linear-gradient(180deg, #fbf6e8, #eee1c2)',
+            boxShadow: '0 2px 0 #a08055, 0 3px 6px rgba(0,0,0,0.15)',
+            color: '#5d4433',
+            fontSize: 12,
+            fontWeight: 800,
             cursor: 'pointer',
+            transition: 'transform 0.1s ease, box-shadow 0.1s ease',
+          }}
+          onPointerDown={(e) => {
+            e.currentTarget.style.transform = 'translateY(1px)';
+            e.currentTarget.style.boxShadow = '0 1px 0 #a08055, 0 2px 4px rgba(0,0,0,0.12)';
+          }}
+          onPointerUp={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 2px 0 #a08055, 0 3px 6px rgba(0,0,0,0.15)';
+          }}
+          onPointerLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 2px 0 #a08055, 0 3px 6px rgba(0,0,0,0.15)';
           }}
         >
           ↩ Laatste zet terugnemen
