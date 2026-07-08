@@ -4,6 +4,7 @@ import confetti from 'canvas-confetti';
 import type { Player } from '../types/GameState';
 import type { PlayerStats } from '../stats';
 import { playVictory } from '../audio/sound';
+import { Pips } from './Die';
 
 /**
  * Game-over "Gouden Medaille-ceremonie" (GSAP):
@@ -172,13 +173,15 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, stats, o
         <div className="go-medal" style={styles.medal}>
           <span className="go-shockwave" style={styles.shockwave} aria-hidden="true" />
           <span className="go-shockwave" style={styles.shockwave} aria-hidden="true" />
-          {PIP_ANGLES.map((a) => (
+          {PIP_ANGLES.map((a, i) => (
             <span
               key={a}
               className="go-pip"
               aria-hidden="true"
-              style={{ ...styles.crownPip, transform: `rotate(${a}deg) translateY(-78px) rotate(${-a}deg)` }}
-            />
+              style={{ ...styles.crownDie, transform: `rotate(${a}deg) translateY(-82px)` }}
+            >
+              <Pips value={i + 1} color="#5b4308" size="74%" />
+            </span>
           ))}
           <span className="go-ring" style={styles.ring} aria-hidden="true" />
           <div className="go-stone" style={styles.stone}>
@@ -308,15 +311,19 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 0 26px rgba(255, 215, 0, 0.45)',
     pointerEvents: 'none',
   },
-  crownPip: {
+  crownDie: {
     position: 'absolute',
-    left: 'calc(50% - 7px)',
-    top: 'calc(50% - 7px)',
-    width: 14,
-    height: 14,
-    borderRadius: '50%',
-    background: 'radial-gradient(circle at 32% 28%, #ffe9a8, #d4af37)',
-    boxShadow: '0 0 10px rgba(255, 215, 0, 0.6)',
+    left: 'calc(50% - 11px)',
+    top: 'calc(50% - 11px)',
+    width: 22,
+    height: 22,
+    borderRadius: 5,
+    background: 'linear-gradient(145deg, #ffe9a8 0%, #f3cf5c 45%, #d4af37 100%)',
+    border: '1px solid #8a6a12',
+    boxShadow: '0 0 12px rgba(255, 215, 0, 0.55), inset 0 -2px 3px rgba(122, 92, 18, 0.4)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     pointerEvents: 'none',
   },
   stone: {
