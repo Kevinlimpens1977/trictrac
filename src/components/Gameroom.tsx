@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, setDoc, getDoc, onSnapshot, updateDoc, collection, query, where, orderBy, limit } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot, updateDoc, collection, query, where, limit } from 'firebase/firestore';
 import type { GameMode, Player } from '../types/GameState';
 import { Die } from './Die';
 
@@ -66,39 +66,17 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, initialJoinId 
         .sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
         .slice(0, 20);
 
-    const holder: { unsub: () => void } = { unsub: () => {} };
-
-    const fancy = query(
-      collection(db, 'games'),
-      where('status', '==', 'waiting'),
-      where('isPrivate', '==', false),
-      where('createdAt', '>', cutoff),
-      orderBy('createdAt', 'desc'),
-      limit(20)
+    // Bewust een simpele query zonder composite-index-vereiste (die index
+    // bestond niet, en een falende query = lege lobby). Filteren, sorteren
+    // en limiteren gebeurt client-side over maximaal 50 documenten.
+    const unsub = onSnapshot(
+      query(collection(db, 'games'), where('status', '==', 'waiting'), limit(50)),
+      (snap) => setOpenGames(mapDocs(snap)),
+      (e) => console.error('[Lobby] Query faalde:', e)
     );
 
-    holder.unsub = onSnapshot(fancy, (snap) => setOpenGames(mapDocs(snap)), (err) => {
-      // Composite index ontbreekt? Firestore logt de aanmaak-URL in deze error.
-      console.warn('[Lobby] Samengestelde query faalde, val terug op simpele query:', err.message);
-      holder.unsub = onSnapshot(
-        query(collection(db, 'games'), where('status', '==', 'waiting'), limit(50)),
-        (snap) => setOpenGames(mapDocs(snap)),
-        (e) => console.error('[Lobby] Fallback-query faalde:', e)
-      );
-    });
-
-    return () => holder.unsub();
+    return () => unsub();
   }, [roomState]);
-
-  // Host sluit de tab tijdens het wachten: game best-effort annuleren
-  useEffect(() => {
-    if (!(isWaiting && isHost && isOnlineMode && gameId)) return;
-    const cancel = () => {
-      updateDoc(doc(db, 'games', gameId), { status: 'cancelled' }).catch(() => {});
-    };
-    window.addEventListener('beforeunload', cancel);
-    return () => window.removeEventListener('beforeunload', cancel);
-  }, [isWaiting, isHost, isOnlineMode, gameId]);
 
   // Firebase listener for host waiting for guest
   useEffect(() => {
@@ -115,6 +93,11 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, initialJoinId 
             setP2Name(data.player2 || 'Gast Speler');
             setIsWaiting(false);
             setRoomState('toss');
+          } else if (data && data.status === 'cancelled') {
+            // Extern geannuleerd: niet eeuwig blijven wachten
+            setIsWaiting(false);
+            setErrorMsg('Het spel is geannuleerd. Host opnieuw om verder te gaan.');
+            setGameId('');
           }
         } else {
           console.log('[Host] Document does not exist (anymore?)');
