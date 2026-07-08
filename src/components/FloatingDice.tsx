@@ -182,7 +182,7 @@ export const FloatingDice: React.FC<FloatingDiceProps> = ({ state, onUndo, inter
       </div>
 
       {/* Voortgangs-dots: groen = gespeeld */}
-      <div style={{ display: 'flex', gap: 5, justifyContent: 'center', marginTop: 6 }} aria-hidden="true">
+      <div style={{ display: 'flex', gap: 5, justifyContent: 'center', marginTop: 16 }} aria-hidden="true">
         {originalSet.map((_, i) => (
           <span
             key={i}

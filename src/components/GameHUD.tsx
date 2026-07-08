@@ -135,10 +135,12 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
           onClick={onLeaveGame}
           style={styles.leaveButton}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(199, 42, 42, 0.12)';
+            e.currentTarget.style.filter = 'brightness(1.08)';
+            e.currentTarget.style.transform = 'translateY(-1px)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.filter = 'none';
+            e.currentTarget.style.transform = 'translateY(0)';
           }}
         >
           ⏻ Verlaat spel
@@ -314,15 +316,17 @@ const styles: Record<string, React.CSSProperties> = {
   leaveButton: {
     minHeight: '44px',
     minWidth: '44px',
-    padding: '8px 18px',
+    padding: '8px 24px',
     fontSize: '13px',
-    fontWeight: 700,
-    color: '#a3271f',
-    background: 'transparent',
-    border: 'none',
-    borderRadius: '8px',
+    fontWeight: 800,
+    color: '#fff',
+    background: 'linear-gradient(180deg, #ff6b6b 0%, #c92a2a 100%)',
+    border: '1.5px solid #861616',
+    borderRadius: '999px',
     cursor: 'pointer',
-    transition: 'background 0.15s ease',
+    boxShadow: '0 2px 0 #861616, 0 3px 6px rgba(0,0,0,0.18)',
+    textShadow: '0 1px 1px rgba(0,0,0,0.35)',
+    transition: 'filter 0.15s ease, transform 0.15s ease',
     letterSpacing: 0
   }
 };
