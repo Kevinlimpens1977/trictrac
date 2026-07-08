@@ -354,7 +354,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           border-radius: 12px;
           background: rgba(255, 255, 255, 0.92);
           color: #2d1b16;
-          font-family: "Impact", sans-serif;
+          font-family: var(--tt-font-display);
           font-size: clamp(18px, 3dvh, 30px);
           line-height: 1.05;
           letter-spacing: 0;
@@ -411,7 +411,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
         .gameRoomHelpDialog h2 {
           margin: 0 0 14px;
           text-align: center;
-          font-family: "Impact", sans-serif;
+          font-family: var(--tt-font-display);
           font-size: clamp(24px, 4dvh, 38px);
           text-transform: uppercase;
         }
@@ -562,10 +562,10 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                   style={styles.compactInput} 
                   placeholder="Naam Speler 2 (Wit)" 
                 />
-                <button onClick={handleLocalStart} style={styles.btnSupercell}>
+                <button onClick={handleLocalStart} className="btn btn--gold btn--block">
                   Start Spel
                 </button>
-                <button onClick={handleLobbyModeBack} style={{...styles.btnSupercellRed, marginTop: '10px'}}>
+                <button onClick={handleLobbyModeBack} className="btn btn--red btn--block" style={{ marginTop: '10px' }}>
                   Terug
                 </button>
               </div>
@@ -604,7 +604,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                           />
                           Privé spel
                         </label>
-                        <button onClick={handleHostGame} style={{...styles.btnSupercellBlue, width: '50%', height: '44px', fontSize: '14px'}}>
+                        <button onClick={handleHostGame} className="btn btn--blue" style={{ width: '50%', fontSize: '14px' }}>
                           Host Game
                         </button>
                       </div>
@@ -632,12 +632,12 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                         style={{...styles.compactInput, width: '60%'}} 
                         placeholder="Privé ID" 
                       />
-                      <button onClick={() => handleJoinGame()} style={{...styles.btnSupercellBlue, width: '38%', height: '44px', fontSize: '12px'}}>
+                      <button onClick={() => handleJoinGame()} className="btn btn--blue" style={{ width: '38%', fontSize: '12px' }}>
                         Join ID
                       </button>
                     </div>
                     {errorMsg && <p style={styles.error}>{errorMsg}</p>}
-                    <button onClick={handleLobbyModeBack} style={{...styles.btnSupercellRed, marginTop: '6px'}}>
+                    <button onClick={handleLobbyModeBack} className="btn btn--red btn--block" style={{ marginTop: '6px' }}>
                       Terug
                     </button>
                   </>
@@ -647,7 +647,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                     <div style={styles.spinner}></div>
                     <p style={styles.text}>Wachten op tegenstander...</p>
                     <p style={styles.text}>Deel dit Game ID: <strong>{gameId}</strong></p>
-                    <button onClick={handleLobbyModeBack} style={{...styles.btnSupercellRed, marginTop: '10px'}}>
+                    <button onClick={handleLobbyModeBack} className="btn btn--red btn--block" style={{ marginTop: '10px' }}>
                       Terug
                     </button>
                   </div>
@@ -686,7 +686,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                 isOnlineMode && !isHost ? (
                   <p style={styles.text}>Wacht op {p1Name} voor de toss...</p>
                 ) : (
-                  <button onClick={handleToss} style={styles.btnSupercell}>
+                  <button onClick={handleToss} className="btn btn--gold">
                     Gooi Dobbelstenen
                   </button>
                 )
@@ -765,7 +765,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#3e2723',
     textAlign: 'center',
     margin: '0 0 4px 0',
-    fontFamily: '"Impact", sans-serif',
+    fontFamily: 'var(--tt-font-display)',
     fontSize: 'clamp(18px, 2.6dvh, 28px)',
     textTransform: 'uppercase',
     letterSpacing: 0,
@@ -812,63 +812,6 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
     fontWeight: 'bold',
     boxSizing: 'border-box',
-    width: '100%',
-  },
-  btnSupercell: {
-    height: 'clamp(44px, 5.8dvh, 48px)',
-    minHeight: '44px',
-    background: 'linear-gradient(180deg, #fbbc05 0%, #e38a04 100%)',
-    border: '2px solid #b86200',
-    borderRadius: '12px',
-    color: 'white',
-    fontFamily: '"Impact", sans-serif',
-    textTransform: 'uppercase',
-    fontSize: 'clamp(13px, 2.2dvh, 18px)',
-    cursor: 'pointer',
-    boxShadow: '0 4px 0 #b86200, 0 6px 12px rgba(0,0,0,0.3)',
-    textShadow: '1px 1px 1px rgba(0,0,0,0.5)',
-    transition: 'transform 0.1s, filter 0.1s',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  btnSupercellBlue: {
-    height: 'clamp(44px, 5.8dvh, 48px)',
-    minHeight: '44px',
-    background: 'linear-gradient(180deg, #5fc3fa 0%, #1e87d6 100%)',
-    border: '2px solid #104e7d',
-    borderRadius: '12px',
-    color: 'white',
-    fontFamily: '"Impact", sans-serif',
-    textTransform: 'uppercase',
-    fontSize: 'clamp(13px, 2.2dvh, 18px)',
-    cursor: 'pointer',
-    boxShadow: '0 4px 0 #104e7d, 0 6px 12px rgba(0,0,0,0.3)',
-    textShadow: '1px 1px 1px rgba(0,0,0,0.5)',
-    transition: 'transform 0.1s, filter 0.1s',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  btnSupercellRed: {
-    height: 'clamp(44px, 5.8dvh, 48px)',
-    minHeight: '44px',
-    background: 'linear-gradient(180deg, #ff6b6b 0%, #c92a2a 100%)',
-    border: '2px solid #861616',
-    borderRadius: '12px',
-    color: 'white',
-    fontFamily: '"Impact", sans-serif',
-    textTransform: 'uppercase',
-    fontSize: 'clamp(13px, 2.2dvh, 18px)',
-    cursor: 'pointer',
-    boxShadow: '0 4px 0 #861616, 0 6px 12px rgba(0,0,0,0.3)',
-    textShadow: '1px 1px 1px rgba(0,0,0,0.5)',
-    transition: 'transform 0.1s',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
     width: '100%',
   },
   copyBtn: {
@@ -934,7 +877,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #104e7d',
     borderRadius: '6px',
     color: 'white',
-    fontFamily: '"Impact", sans-serif',
+    fontFamily: 'var(--tt-font-display)',
     textTransform: 'uppercase',
     fontSize: '12px',
     padding: '4px 12px',

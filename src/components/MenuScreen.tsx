@@ -130,7 +130,7 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStart, onLogout }) => 
           border: 0.4vh solid #104e7d;
           border-radius: 2vh;
           color: white;
-          font-family: "Impact", sans-serif;
+          font-family: var(--tt-font-display);
           text-transform: uppercase;
           font-size: 2.8vh;
           cursor: pointer;
