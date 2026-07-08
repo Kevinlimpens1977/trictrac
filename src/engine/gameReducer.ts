@@ -423,16 +423,36 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
         };
       }
 
-      if (newState.remainingDice.length === 0 || !hasAnyValidMove(newState)) {
-        if (newState.remainingDice.length === 0) {
-          return handleEndOfActions(newState);
-        } else {
+      if (newState.remainingDice.length === 0) {
+        return handleEndOfActions(newState);
+      }
+
+      // Nog stenen op de bar? Dan is de volgende dobbelsteen VERPLICHT voor
+      // herplaatsing (lopen mag pas als alles weer op het bord staat). Kan
+      // de steen niet geplaatst worden, dan is de beurt voorbij.
+      if (getBarCount(newState, player) > 0) {
+        const barResult = resolveBarEntry(newState, newState.remainingDice);
+        if (barResult.forfeited) {
           return {
             ...newState,
             ...nextTurn(newState),
-            msg: 'Geen zetten meer mogelijk met de resterende dobbelstenen. Beurt voorbij.',
+            msg: barResult.forfeitReason || 'Beurt verloren door geblokkeerde bar!',
           };
         }
+        const barLeft = getBarCount(newState, player);
+        return {
+          ...newState,
+          validTos: [barResult.entryPoint],
+          msg: `Nog ${barLeft} ${barLeft === 1 ? 'steen' : 'stenen'} op de bar. Speel eerst naar punt ${barResult.entryPoint}.`,
+        };
+      }
+
+      if (!hasAnyValidMove(newState)) {
+        return {
+          ...newState,
+          ...nextTurn(newState),
+          msg: 'Geen zetten meer mogelijk met de resterende dobbelstenen. Beurt voorbij.',
+        };
       }
 
       return {

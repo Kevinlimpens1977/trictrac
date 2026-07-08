@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { GameState } from '../types/GameState';
 import { FloatingDice } from './FloatingDice';
 import { isMuted, toggleMuted } from '../audio/sound';
@@ -19,6 +19,25 @@ interface GameHUDProps {
 
 export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onLeaveGame, localPlayer, autoBearOff = true, onToggleAutoBearOff, turnRemaining }) => {
   const [muted, setMuted] = useState(isMuted());
+
+  /* Fullscreen-toggle (verborgen waar de browser het niet ondersteunt,
+     zoals Safari op iPhone — daar dekt de PWA-installatie dit af) */
+  const fullscreenSupported = typeof document !== 'undefined' && !!document.fullscreenEnabled;
+  const [isFullscreen, setIsFullscreen] = useState(() => !!document.fullscreenElement);
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => { /* al gesloten */ });
+    } else {
+      document.documentElement.requestFullscreen?.().catch((e) => {
+        console.warn('[Fullscreen] geweigerd door browser:', e?.message);
+      });
+    }
+  };
   const isBlack = state.turn === 'B';
   const colorName = isBlack ? 'Zwart' : 'Wit';
   const actualPlayerName = state.playerNames ? state.playerNames[state.turn] : colorName;
@@ -67,13 +86,25 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
             </span>
           )}
         </div>
-        <button
-          onClick={() => setMuted(toggleMuted())}
-          style={styles.muteButton}
-          aria-label={muted ? 'Geluid aanzetten' : 'Geluid uitzetten'}
-        >
-          {muted ? '🔇' : '🔊'}
-        </button>
+        <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+          {fullscreenSupported && (
+            <button
+              onClick={toggleFullscreen}
+              style={styles.muteButton}
+              aria-label={isFullscreen ? 'Volledig scherm sluiten' : 'Volledig scherm'}
+              title={isFullscreen ? 'Volledig scherm sluiten' : 'Volledig scherm'}
+            >
+              {isFullscreen ? '🗗' : '⛶'}
+            </button>
+          )}
+          <button
+            onClick={() => setMuted(toggleMuted())}
+            style={styles.muteButton}
+            aria-label={muted ? 'Geluid aanzetten' : 'Geluid uitzetten'}
+          >
+            {muted ? '🔇' : '🔊'}
+          </button>
+        </div>
       </div>
 
       {/* Feedback uit de engine (state.msg) */}
