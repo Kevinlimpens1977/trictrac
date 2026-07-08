@@ -114,6 +114,18 @@ export function playBearOff() {
   } catch { /* audio niet kritiek */ }
 }
 
+/** Zacht twee-tonig pingetje: chatbericht ontvangen */
+export function playChatPing() {
+  if (muted) return;
+  const c = ensureCtx();
+  if (!c) return;
+  try {
+    const now = c.currentTime;
+    click(c, now, 880, 0.09, 0.06, 'sine');
+    click(c, now + 0.08, 1174, 0.12, 0.06, 'sine');
+  } catch { /* audio niet kritiek */ }
+}
+
 /** Haptische feedback op mobiel; volgt de mute-instelling */
 export function vibrate(pattern: number | number[]) {
   if (muted) return;

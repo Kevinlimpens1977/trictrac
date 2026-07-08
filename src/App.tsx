@@ -13,10 +13,11 @@ import { isPlayerSetupDone } from './engine/setupEngine';
 import type { GameMode, Player, GameState } from './types/GameState';
 import { DiceRoller } from './components/DiceRoller';
 import { Coach } from './components/Coach';
+import { ChatBox } from './components/ChatBox';
 import { loadStats, recordGame, type PlayerStats } from './stats';
 import { playPieceMove, playHit, playBearOff, vibrate } from './audio/sound';
 import { db } from './firebase';
-import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, onSnapshot, deleteField } from 'firebase/firestore';
 import './App.css';
 
 function App() {
@@ -151,10 +152,14 @@ function App() {
     } catch { /* opslag vol/geblokkeerd is geen spelfout */ }
   }, [state.lastUpdateId, state.screen, state.mode, state.gameId, state.localPlayer, state]);
 
-  // Opruimen zodra een potje echt klaar is
+  // Opruimen zodra een potje echt klaar is (incl. de chat van dit potje)
   useEffect(() => {
-    if (state.screen === 'gameover') clearSaves();
-  }, [state.screen, clearSaves]);
+    if (state.screen !== 'gameover') return;
+    clearSaves();
+    if (state.mode === 'pvp' && state.gameId) {
+      updateDoc(doc(db, 'games', state.gameId), { chat: deleteField() }).catch(() => {});
+    }
+  }, [state.screen, state.mode, state.gameId, clearSaves]);
 
   /* ─── Carrière-statistieken per gebruiker ─── */
   const [career, setCareer] = useState<PlayerStats | null>(() => (user ? loadStats(user.uid) : null));
@@ -764,6 +769,14 @@ function App() {
       )}
       
       {introPhase === 'game' && state.screen === 'game' && <Coach state={state} />}
+
+      {state.mode === 'pvp' && state.gameId && state.localPlayer && state.screen === 'game' && (
+        <ChatBox
+          gameId={state.gameId}
+          localPlayer={state.localPlayer}
+          opponentName={state.playerNames[state.localPlayer === 'B' ? 'W' : 'B']}
+        />
+      )}
 
       {state.screen === 'gameover' && state.winner && (
         <GameOverScreen winner={state.winner} stats={state.stats} onRestart={handleRestart} career={career} />
