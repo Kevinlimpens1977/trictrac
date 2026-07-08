@@ -32,7 +32,7 @@ export function createInitialState(): GameState {
   const points: (GameState['points'][number])[] = new Array(25).fill(null);
 
   return {
-    screen: 'menu',
+    screen: 'gameroom',
     mode: 'pvp',
     playerNames: { B: 'Speler 1', W: 'Speler 2' },
     gameId: null,
@@ -165,7 +165,6 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
       } else {
         return {
           ...createInitialState(),
-          screen: 'menu',
           msg: `${playerName(abandoner)} heeft het spel verlaten. Het spel is afgebroken.`,
         };
       }
@@ -493,7 +492,6 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
       } else {
         return {
           ...createInitialState(),
-          screen: 'menu', // or keep it simple
           msg: 'Spel afgebroken. Er waren niet genoeg stenen geplaatst.',
         };
       }

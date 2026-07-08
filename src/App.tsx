@@ -1,10 +1,10 @@
 import React, { useReducer, useEffect, useCallback, useRef, useState } from 'react';
-import { MenuScreen } from './components/MenuScreen';
 import { Gameroom } from './components/Gameroom';
 import { GameBoard } from './components/GameBoard';
 import { GameHUD } from './components/GameHUD';
 import { GameOverScreen } from './components/GameOverScreen';
 import { AuthScreen } from './components/AuthScreen';
+import { signOut } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { gameReducer, createInitialState } from './engine/gameReducer';
 import { startAILoop } from './engine/aiEngine';
@@ -15,7 +15,7 @@ import { DiceRoller } from './components/DiceRoller';
 import { Coach } from './components/Coach';
 import { loadStats, recordGame, type PlayerStats } from './stats';
 import { playPieceMove, playHit, playBearOff, vibrate } from './audio/sound';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { doc, getDoc, updateDoc, onSnapshot, deleteField } from 'firebase/firestore';
 import './App.css';
 
@@ -390,12 +390,15 @@ function App() {
   }, [state.isRolling]);
 
   /* ─── Handlers ─── */
-  const handleStart = useCallback((mode: GameMode) => {
-    if (mode === 'pvp') {
-      dispatch({ type: 'GO_TO_GAMEROOM' });
-    } else {
-      dispatch({ type: 'START_GAME', mode });
-    }
+  const handleLogout = useCallback(() => {
+    signOut(auth).catch(() => { /* lokaal uitloggen volstaat */ });
+    clearSaves();
+    setUser(null);
+    dispatch({ type: 'RESET' });
+  }, [clearSaves]);
+
+  const handleStartComputer = useCallback(() => {
+    dispatch({ type: 'START_GAME', mode: 'pva' });
   }, []);
 
   const handleStartMatch = useCallback((mode: GameMode, playerNames?: { B: string, W: string }, gameId?: string, starter?: Player, localPlayer?: Player) => {
@@ -624,10 +627,19 @@ function App() {
     return <AuthScreen onAuthenticated={(user) => setUser(user)} />;
   }
 
-  if (state.screen === 'menu') {
+  // 'menu' bestaat alleen nog in oude savegames/synced states: ook dan de hub
+  if (state.screen === 'gameroom' || state.screen === 'menu') {
+    const joinParam = new URLSearchParams(window.location.search).get('join');
     return (
       <>
-        <MenuScreen onStart={handleStart} career={career} />
+        <Gameroom
+          onBack={() => dispatch({ type: 'RESET' })}
+          onStartMatch={handleStartMatch}
+          onStartComputer={handleStartComputer}
+          onLogout={handleLogout}
+          career={career}
+          initialJoinId={joinParam ?? undefined}
+        />
         {rotateHintBanner(true)}
         {resumeOffer && (
           <div style={{ ...styles.modalOverlay, position: 'fixed' }}>
@@ -654,20 +666,6 @@ function App() {
             </div>
           </div>
         )}
-      </>
-    );
-  }
-
-  if (state.screen === 'gameroom') {
-    const joinParam = new URLSearchParams(window.location.search).get('join');
-    return (
-      <>
-        <Gameroom
-          onBack={() => dispatch({ type: 'RESET' })}
-          onStartMatch={handleStartMatch}
-          initialJoinId={joinParam ?? undefined}
-        />
-        {rotateHintBanner(true)}
       </>
     );
   }

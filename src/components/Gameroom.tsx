@@ -2,11 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc, onSnapshot, updateDoc, collection, query, where, limit } from 'firebase/firestore';
 import type { GameMode, Player } from '../types/GameState';
+import type { PlayerStats } from '../stats';
 import { Die } from './Die';
 
 interface GameroomProps {
   onBack: () => void;
   onStartMatch: (mode: GameMode, playerNames?: { B: string, W: string }, gameId?: string, starter?: Player, localPlayer?: Player) => void;
+  /** Start direct een potje tegen de computer */
+  onStartComputer?: () => void;
+  /** Uitloggen (toont de uitlogknop rechtsboven) */
+  onLogout?: () => void;
+  /** Carrière-statistieken voor de chip onderin */
+  career?: PlayerStats | null;
   /** Vooringevuld game-id vanuit een ?join=XXXXX deel-link */
   initialJoinId?: string;
 }
@@ -21,7 +28,7 @@ function waitingLabel(createdAt?: number): string {
   return mins === 0 ? 'zojuist' : `${mins} min geleden`;
 }
 
-export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, initialJoinId }) => {
+export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, onStartComputer, onLogout, career, initialJoinId }) => {
   const [roomState, setRoomState] = useState<RoomState>('lobby');
   const [lobbyMode, setLobbyMode] = useState<LobbyMode>(initialJoinId ? 'online' : 'menu');
   
@@ -389,8 +396,51 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, initialJoinId 
           font-family: sans-serif;
           font-weight: 900;
         }
+        .gameRoomChoiceComputer {
+          border-color: #e3a004;
+        }
         .gameRoomChoiceLocal {
           border-color: #12a8e8;
+        }
+        .gameRoomLogout {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          z-index: 20;
+          min-height: 44px;
+          min-width: 44px;
+          padding: 8px 18px;
+          border-radius: 999px;
+          border: 1.5px solid #861616;
+          background: linear-gradient(180deg, #ff6b6b 0%, #c92a2a 100%);
+          color: #fff;
+          font-weight: 800;
+          font-size: 13px;
+          cursor: pointer;
+          box-shadow: 0 2px 0 #861616, 0 4px 10px rgba(0, 0, 0, 0.3);
+          transition: filter 0.15s ease, transform 0.15s ease;
+        }
+        .gameRoomLogout:hover {
+          filter: brightness(1.08);
+          transform: translateY(-1px);
+        }
+        .menuStats {
+          position: absolute;
+          bottom: 3%;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 20;
+          display: flex;
+          gap: 6px;
+          padding: 6px 14px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.85);
+          border: 1px solid rgba(96, 58, 22, 0.25);
+          color: #4e342e;
+          font-weight: 700;
+          font-size: 13px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+          white-space: nowrap;
         }
         .gameRoomChoiceOnline {
           border-color: #12a8e8;
@@ -501,6 +551,10 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, initialJoinId 
            het formulier af (geen scroll mogelijk). Laat de stage het scherm
            vullen zodat de overlay past en zelf kan scrollen. */
         @media (max-width: 700px) and (orientation: portrait) {
+          /* Onder de zwevende draai-tip-banner blijven */
+          .gameRoomLogout {
+            top: 78px;
+          }
           .gameRoomStage {
             width: calc(100vw - (var(--room-frame-gap) * 2)) !important;
             height: calc(100dvh - (var(--room-frame-gap) * 2)) !important;
@@ -561,6 +615,18 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, initialJoinId 
           '--room-panel-height': '66%'
         } as React.CSSProperties}
       >
+        {roomState === 'lobby' && onLogout && (
+          <button className="gameRoomLogout" onClick={onLogout} aria-label="Uitloggen">
+            ⏻ Uitloggen
+          </button>
+        )}
+        {roomState === 'lobby' && lobbyMode === 'menu' && career && career.played > 0 && (
+          <div className="menuStats" aria-label="Jouw statistieken">
+            <span>🏆 {career.won} gewonnen</span>
+            <span>·</span>
+            <span>{career.played} gespeeld</span>
+          </div>
+        )}
         <div className="gameRoomOverlay">
           {roomState === 'lobby' && (
             <>
@@ -569,6 +635,11 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, initialJoinId 
                 <button className="gameRoomChoiceButton gameRoomChoiceHelp" onClick={() => setShowHelp(true)}>
                   Speluitleg
                 </button>
+                {onStartComputer && (
+                  <button className="gameRoomChoiceButton gameRoomChoiceComputer" onClick={onStartComputer}>
+                    Speel tegen de computer
+                  </button>
+                )}
                 <button className="gameRoomChoiceButton gameRoomChoiceLocal" onClick={() => setLobbyMode('local')}>
                   Speel op één computer
                 </button>
