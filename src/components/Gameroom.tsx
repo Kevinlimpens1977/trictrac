@@ -480,7 +480,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           .gameRoomOverlay {
             width: min(96vw, 820px);
             max-height: calc(100dvh - 12px);
-            padding: 8px 12px;
+            padding: 6px 12px;
           }
           .gameRoomChoices {
             width: min(64%, 520px);
@@ -489,6 +489,30 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           .gameRoomChoiceButton {
             min-height: 44px;
             font-size: clamp(16px, 5dvh, 22px);
+          }
+          /* Compacter zodat het online-paneel met 44px-knoppen zonder
+             scrollen past op korte landscape-schermen */
+          .gameRoomColumn {
+            gap: 5px !important;
+          }
+          .gameRoomColumn h2 {
+            font-size: 16px !important;
+            margin: 0 !important;
+          }
+          .gameRoomColumn input:not([type="checkbox"]) {
+            height: 32px !important;
+            min-height: 32px !important;
+          }
+          .gameRoomColumn .gameRoomHostBox {
+            gap: 5px !important;
+            padding: 5px !important;
+          }
+          .gameRoomColumn .gameRoomDivider {
+            margin: 0 !important;
+            font-size: 11px !important;
+          }
+          .gameRoomColumn .gameRoomGameList {
+            max-height: 44px !important;
           }
         }
       `}</style>
@@ -561,7 +585,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                       placeholder="Jouw Naam" 
                     />
                     
-                    <div style={styles.hostBox}>
+                    <div className="gameRoomHostBox" style={styles.hostBox}>
                       <div style={styles.compactRow}>
                         <span style={styles.idLabel}>Game ID:</span>
                         <div style={styles.idDisplay}>
@@ -585,9 +609,9 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                       </div>
                     </div>
 
-                    <div style={styles.divider}>OF JOIN EEN SPEL</div>
+                    <div className="gameRoomDivider" style={styles.divider}>OF JOIN EEN SPEL</div>
                     
-                    <div style={styles.gameListContainer}>
+                    <div className="gameRoomGameList" style={styles.gameListContainer}>
                       {openGames.length === 0 ? (
                         <p style={styles.textSmall}>Geen open spellen momenteel...</p>
                       ) : (

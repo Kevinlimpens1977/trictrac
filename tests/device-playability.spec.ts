@@ -89,7 +89,8 @@ async function expectMenuButtonsPlacement(page: Page, viewport: { width: number;
     for (const [label, box] of [['pvp', pvpBox], ['pvc', pvcBox]] as const) {
       expect(box.y, `${label} button should sit below the stage`).toBeGreaterThanOrEqual(stageBox.y + stageBox.height - 1);
       expect(box.width, `${label} button should span the layout width`).toBeGreaterThanOrEqual(stageBox.width * 0.95);
-      expect(box.height, `${label} button should be comfortably tappable`).toBeGreaterThanOrEqual(48);
+      // 0.5px epsilon voor subpixel-rendering (Firefox meet 48px als 47.99997)
+      expect(box.height, `${label} button should be comfortably tappable`).toBeGreaterThanOrEqual(47.5);
     }
     expect(pvcBox.y, 'pvc below pvp').toBeGreaterThan(pvpBox.y);
     return;
@@ -129,7 +130,7 @@ async function expectMenuButtonsPlacement(page: Page, viewport: { width: number;
 async function expectAllVisibleButtons44(page: Page, context: string) {
   // offsetWidth/offsetHeight: layout-maat, onafhankelijk van transforms
   // (entry-animaties zoals popIn schalen tijdelijk via transform).
-  const buttons = await page.evaluate(() => {
+  const measure = () => page.evaluate(() => {
     return Array.from(document.querySelectorAll('button'))
       .filter((b) => {
         const style = window.getComputedStyle(b);
@@ -144,6 +145,17 @@ async function expectAllVisibleButtons44(page: Page, context: string) {
 
   // 0.5px epsilon: subpixel-rendering kan exact-44px targets als 43.99998 meten
   const MIN = 43.5;
+
+  // Layout (dvh/clamp/fonts) kan onder parallelle testload nog even zetten;
+  // meet opnieuw voordat we definitief falen.
+  let buttons = await measure();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ok = buttons.length > 0 && buttons.every((b) => b.width >= MIN && b.height >= MIN);
+    if (ok) break;
+    await page.waitForTimeout(300);
+    buttons = await measure();
+  }
+
   expect(buttons.length, `${context}: at least one visible button expected`).toBeGreaterThan(0);
   for (const b of buttons) {
     expect(b.width, `${context}: "${b.label}" should be >=44px wide`).toBeGreaterThanOrEqual(MIN);

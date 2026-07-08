@@ -3,8 +3,8 @@ import { test, expect } from '@playwright/test';
 test('has title and renders AuthScreen', async ({ page }) => {
   await page.goto('/');
 
-  // Expect a title "trictrac"
-  await expect(page).toHaveTitle(/trictrac/i);
+  // Expect the Tric-Trac title
+  await expect(page).toHaveTitle(/tric-trac/i);
 
   // Expect the page to have the Auth Screen elements without an extra heading in the card
   await expect(page.getByRole('heading', { name: 'Spelen als' })).toHaveCount(0);
