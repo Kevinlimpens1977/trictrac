@@ -513,6 +513,19 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, initialJoinId 
             width: 100%;
           }
         }
+        /* Mobiel portret: de 16:9-stage is daar maar ~200px hoog en knipt
+           het formulier af (geen scroll mogelijk). Laat de stage het scherm
+           vullen zodat de overlay past en zelf kan scrollen. */
+        @media (max-width: 700px) and (orientation: portrait) {
+          .gameRoomStage {
+            width: calc(100vw - (var(--room-frame-gap) * 2)) !important;
+            height: calc(100dvh - (var(--room-frame-gap) * 2)) !important;
+            aspect-ratio: auto !important;
+          }
+          .gameRoomOverlay {
+            max-height: calc(100dvh - (var(--room-frame-gap) * 2) - 16px);
+          }
+        }
         @media (max-height: 520px) and (orientation: landscape) {
           .gameRoomOverlay {
             width: min(96vw, 820px);

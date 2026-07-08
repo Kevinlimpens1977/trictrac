@@ -27,6 +27,15 @@ async function expectControlInViewport(page: import('@playwright/test').Page, na
   expect(box.y + box.height, `${String(name)} should not overflow bottom`).toBeLessThanOrEqual(viewport.height);
   expect(box.width, `${String(name)} should be tappable`).toBeGreaterThanOrEqual(44);
   expect(box.height, `${String(name)} should be tappable`).toBeGreaterThanOrEqual(36);
+
+  // Clipping-check: het midden van de control moet daadwerkelijk raakbaar
+  // zijn (een door overflow:hidden afgeknipt element heeft wel een box,
+  // maar vangt geen taps)
+  const receivesTap = await control.evaluate((element, point) => {
+    const topElement = document.elementFromPoint(point.x, point.y);
+    return topElement === element || element.contains(topElement);
+  }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+  expect(receivesTap, `${String(name)} should receive taps at its center`).toBe(true);
 }
 
 async function expectGameroomFramedCard(page: import('@playwright/test').Page) {
@@ -55,7 +64,13 @@ async function expectGameroomFramedCard(page: import('@playwright/test').Page) {
   expect(viewport, 'viewport should be available').not.toBeNull();
   if (!stageBox || !viewport) return;
 
-  expect(stageBox.width / stageBox.height).toBeCloseTo(16 / 9, 2);
+  const isMobilePortrait = viewport.width <= 700 && viewport.height > viewport.width;
+  if (isMobilePortrait) {
+    // Mobiel portret: stage vult het scherm zodat het formulier past
+    expect(stageBox.height, 'stage should fill the viewport height').toBeGreaterThanOrEqual(viewport.height * 0.85);
+  } else {
+    expect(stageBox.width / stageBox.height).toBeCloseTo(16 / 9, 2);
+  }
   expect(stageBox.x).toBeGreaterThanOrEqual(8);
   expect(stageBox.y).toBeGreaterThanOrEqual(8);
   expect(stageBox.x + stageBox.width).toBeLessThanOrEqual(viewport.width - 8);

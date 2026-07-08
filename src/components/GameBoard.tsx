@@ -12,6 +12,7 @@ import {
 } from '../constants/boardLayout';
 import type { GameState, GameEvent, Player } from '../types/GameState';
 import { canBearOff } from '../engine/moveEngine';
+import { isPlayerSetupDone } from '../engine/setupEngine';
 
 
 interface GameBoardProps {
@@ -296,8 +297,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
           const pt = layout.points.find((p) => p.id === ptId);
           if (!pt) return null;
           
-          const isSetup = state.phase === 'setup';
-          if (isSetup) return null; // Geen groen kader tijdens setup
+          const isSetup = !isPlayerSetupDone(state, state.turn);
+          if (isSetup) return null; // Geen groen kader tijdens de eigen opzetfase
           
           const halfW = 18;
           const rectY = pt.isTop ? pt.yBase : pt.yBase - triH;

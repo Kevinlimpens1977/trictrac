@@ -28,6 +28,13 @@ function App() {
   });
 
   const [state, dispatch] = useReducer(gameReducer, undefined, () => {
+    // Testhook: laad een voorbereide state (alleen met test=1&resume=1)
+    if (window.location.search.includes('test=1') && window.location.search.includes('resume=1')) {
+      try {
+        const raw = localStorage.getItem('tt-savegame');
+        if (raw) return { ...JSON.parse(raw), history: [] } as GameState;
+      } catch { /* val terug op normale start */ }
+    }
     if (window.location.search.includes('start_pva=1')) {
       return gameReducer(createInitialState(), { type: 'START_GAME', mode: 'pva' });
     }
