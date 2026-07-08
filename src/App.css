@@ -111,7 +111,11 @@
   --game-frame-radius: clamp(20px, 2.4vw, 34px);
   position: relative !important;
   isolation: isolate;
-  padding: var(--game-frame-gap) !important;
+  padding:
+    max(var(--game-frame-gap), env(safe-area-inset-top, 0px))
+    max(var(--game-frame-gap), env(safe-area-inset-right, 0px))
+    max(var(--game-frame-gap), env(safe-area-inset-bottom, 0px))
+    max(var(--game-frame-gap), env(safe-area-inset-left, 0px)) !important;
   background:
     radial-gradient(circle at 18% 20%, rgba(255, 244, 184, 0.55), transparent 32%),
     radial-gradient(circle at 82% 16%, rgba(219, 235, 255, 0.7), transparent 34%),
@@ -181,7 +185,11 @@
     align-items: center !important;
     justify-content: flex-start !important;
     gap: 12px;
-    padding: max(14px, env(safe-area-inset-top)) var(--game-frame-gap) var(--game-frame-gap) !important;
+    padding:
+      max(14px, env(safe-area-inset-top, 0px))
+      max(var(--game-frame-gap), env(safe-area-inset-right, 0px))
+      max(var(--game-frame-gap), env(safe-area-inset-bottom, 0px))
+      max(var(--game-frame-gap), env(safe-area-inset-left, 0px)) !important;
     overflow: hidden !important;
   }
 
