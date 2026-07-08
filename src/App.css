@@ -78,6 +78,34 @@
   display: none;
 }
 
+/* Feedbackregel in de HUD (state.msg) */
+@keyframes hudMsgIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes hudMsgShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  50% { transform: translateX(3px); }
+  75% { transform: translateX(-2px); }
+}
+
+.hud-msg {
+  animation: hudMsgIn 0.25s ease-out;
+}
+
+.hud-msg--error {
+  color: #a3271f !important;
+  animation: hudMsgIn 0.25s ease-out, hudMsgShake 0.35s ease-in-out 0.1s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-msg, .hud-msg--error {
+    animation: none;
+  }
+}
+
 .game-shell {
   --game-frame-gap: clamp(10px, 1.6vw, 18px);
   --game-frame-radius: clamp(20px, 2.4vw, 34px);

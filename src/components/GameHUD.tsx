@@ -24,6 +24,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
   const needsRoll = !state.rawDice;
   const isAITurn = state.mode === 'pva' && state.turn === 'W';
   const isWaitingForRemote = state.mode === 'pvp' && localPlayer && localPlayer !== state.turn;
+  const isErrorMsg = /moet eerst|geen geldige|geen zetten|verloren|overgeslagen|geblokkeerd|vol\./i.test(state.msg);
 
   return (
     <div 
@@ -40,6 +41,16 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
           }} />
           <span style={styles.turnLabel}>{turnLabelText}</span>
         </div>
+      </div>
+
+      {/* Feedback uit de engine (state.msg) */}
+      <div
+        key={state.msg}
+        className={`hud-msg${isErrorMsg ? ' hud-msg--error' : ''}`}
+        style={styles.message}
+        aria-live="polite"
+      >
+        {state.msg}
       </div>
 
       {/* Dice area */}
@@ -152,12 +163,17 @@ const styles: Record<string, React.CSSProperties> = {
   },
   message: {
     fontSize: '13px',
-    color: 'rgba(255,255,255,0.7)',
+    fontWeight: 600,
+    color: '#5d4433',
     textAlign: 'center' as const,
-    lineHeight: '1.4',
+    lineHeight: '1.35',
     minHeight: '36px',
+    maxHeight: '36px',
+    overflow: 'hidden',
+    width: '100%',
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   diceArea: {
     display: 'flex',
