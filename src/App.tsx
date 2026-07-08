@@ -471,6 +471,17 @@ function App() {
     try { sessionStorage.setItem('tt-rotate-hint', '1'); } catch { /* private mode */ }
   }, []);
 
+  const rotateHintBanner = (floating: boolean) => (
+    isMobilePortrait && showRotateHint ? (
+      <div className={`rotate-hint${floating ? ' rotate-hint--floating' : ''}`} role="status">
+        <span>🔄 Draai je telefoon horizontaal voor een groter bord</span>
+        <button className="rotate-hint-close" onClick={dismissRotateHint} aria-label="Sluit tip">
+          ✕
+        </button>
+      </div>
+    ) : null
+  );
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 'z') {
@@ -562,6 +573,7 @@ function App() {
     return (
       <>
         <MenuScreen onStart={handleStart} career={career} />
+        {rotateHintBanner(true)}
         {resumeOffer && (
           <div style={{ ...styles.modalOverlay, position: 'fixed' }}>
             <div style={styles.modalContent}>
@@ -594,11 +606,14 @@ function App() {
   if (state.screen === 'gameroom') {
     const joinParam = new URLSearchParams(window.location.search).get('join');
     return (
-      <Gameroom
-        onBack={() => dispatch({ type: 'RESET' })}
-        onStartMatch={handleStartMatch}
-        initialJoinId={joinParam ?? undefined}
-      />
+      <>
+        <Gameroom
+          onBack={() => dispatch({ type: 'RESET' })}
+          onStartMatch={handleStartMatch}
+          initialJoinId={joinParam ?? undefined}
+        />
+        {rotateHintBanner(true)}
+      </>
     );
   }
 
@@ -613,14 +628,7 @@ function App() {
         </div>
       )}
 
-      {introPhase === 'game' && isMobilePortrait && showRotateHint && (
-        <div className="rotate-hint" role="status">
-          <span>🔄 Draai je telefoon voor een groter bord</span>
-          <button className="rotate-hint-close" onClick={dismissRotateHint} aria-label="Sluit tip">
-            ✕
-          </button>
-        </div>
-      )}
+      {introPhase === 'game' && rotateHintBanner(false)}
 
       <div className="board-wrapper" style={styles.boardWrapper}>
         <GameBoard
