@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { GameState } from '../types/GameState';
 import { FloatingDice } from './FloatingDice';
-import { DiceRoller } from './DiceRoller';
+import { isMuted, toggleMuted } from '../audio/sound';
 
 interface GameHUDProps {
   state: GameState;
@@ -10,9 +10,12 @@ interface GameHUDProps {
   onLeaveGame: () => void;
   localPlayer?: string;
   turn?: string;
+  autoBearOff?: boolean;
+  onToggleAutoBearOff?: () => void;
 }
 
-export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onLeaveGame, localPlayer }) => {
+export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onLeaveGame, localPlayer, autoBearOff = true, onToggleAutoBearOff }) => {
+  const [muted, setMuted] = useState(isMuted());
   const isBlack = state.turn === 'B';
   const colorName = isBlack ? 'Zwart' : 'Wit';
   const actualPlayerName = state.playerNames ? state.playerNames[state.turn] : colorName;
@@ -41,6 +44,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
           }} />
           <span style={styles.turnLabel}>{turnLabelText}</span>
         </div>
+        <button
+          onClick={() => setMuted(toggleMuted())}
+          style={styles.muteButton}
+          aria-label={muted ? 'Geluid aanzetten' : 'Geluid uitzetten'}
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
       </div>
 
       {/* Feedback uit de engine (state.msg) */}
@@ -78,10 +88,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
           </div>
         )}
         
-        {/* Playable dice and Roll animation */}
+        {/* Speelbare dobbeltokens (worp-animatie staat op het bord) */}
         <div style={styles.diceContainer}>
-          <FloatingDice state={state} onUndo={onUndo} />
-          <DiceRoller isRolling={state.isRolling} dice={state.rawDice} />
+          <FloatingDice state={state} onUndo={onUndo} interactive={!isWaitingForRemote} />
         </div>
       </div>
 
@@ -91,6 +100,19 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
           {state.barB > 0 && <span>Bar ⬛: {state.barB}</span>}
           {state.barW > 0 && <span>Bar ⬜: {state.barW}</span>}
         </div>
+      )}
+
+      {/* Instelling: automatisch uitspelen (bear-off) */}
+      {onToggleAutoBearOff && (
+        <label style={styles.autoRow}>
+          <input
+            type="checkbox"
+            checked={autoBearOff}
+            onChange={onToggleAutoBearOff}
+            style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#8d6e63' }}
+          />
+          Automatisch uitspelen
+        </label>
       )}
 
       {/* Leave Game Button */}
@@ -233,8 +255,33 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '3px',
     transition: 'width 0.3s ease',
   },
-  leaveContainer: {
+  muteButton: {
+    width: '44px',
+    height: '44px',
+    border: 'none',
+    borderRadius: '10px',
+    background: 'rgba(120, 80, 40, 0.1)',
+    fontSize: '18px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: '0 0 auto',
+  },
+  autoRow: {
     marginTop: 'auto',
+    minHeight: '44px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    fontSize: '12px',
+    fontWeight: 700,
+    color: '#5d4433',
+    cursor: 'pointer',
+    userSelect: 'none',
+  },
+  leaveContainer: {
     width: '100%',
     display: 'flex',
     justifyContent: 'center',

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc, onSnapshot, updateDoc, collection, query, where } from 'firebase/firestore';
 import type { GameMode, Player } from '../types/GameState';
+import { Die } from './Die';
 
 interface GameroomProps {
   onBack: () => void;
@@ -665,15 +666,19 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
               <div style={styles.tossDisplay}>
                 <div style={styles.playerToss}>
                   <p style={styles.playerName}>{p1Name} (Zwart)</p>
-                  <div className={isTossing ? "rolling" : ""} style={styles.tossDie}>
-                    {tossP1 !== null ? <DiceFace value={tossP1} color="black" /> : <span style={styles.questionMark}>?</span>}
-                  </div>
+                  {tossP1 !== null ? (
+                    <Die value={tossP1} color="black" size={60} rolling={isTossing} />
+                  ) : (
+                    <div style={styles.tossDie}><span style={styles.questionMark}>?</span></div>
+                  )}
                 </div>
                 <div style={styles.playerToss}>
                   <p style={styles.playerName}>{p2Name} (Wit)</p>
-                  <div className={isTossing ? "rolling" : ""} style={styles.tossDie}>
-                    {tossP2 !== null ? <DiceFace value={tossP2} color="white" /> : <span style={styles.questionMark}>?</span>}
-                  </div>
+                  {tossP2 !== null ? (
+                    <Die value={tossP2} color="white" size={60} rolling={isTossing} />
+                  ) : (
+                    <div style={styles.tossDie}><span style={styles.questionMark}>?</span></div>
+                  )}
                 </div>
               </div>
 
@@ -712,43 +717,6 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           </div>
         )}
       </div>
-    </div>
-  );
-};
-
-const DiceFace: React.FC<{value: number, color: 'white' | 'black'}> = ({value, color}) => {
-  const isBlack = color === 'black';
-  const dotColor = isBlack ? '#e0e0e0' : '#222';
-  
-  const dotPositions: Record<number, {r: number, c: number}[]> = {
-    1: [{r: 2, c: 2}],
-    2: [{r: 1, c: 1}, {r: 3, c: 3}],
-    3: [{r: 1, c: 1}, {r: 2, c: 2}, {r: 3, c: 3}],
-    4: [{r: 1, c: 1}, {r: 1, c: 3}, {r: 3, c: 1}, {r: 3, c: 3}],
-    5: [{r: 1, c: 1}, {r: 1, c: 3}, {r: 2, c: 2}, {r: 3, c: 1}, {r: 3, c: 3}],
-    6: [{r: 1, c: 1}, {r: 2, c: 1}, {r: 3, c: 1}, {r: 1, c: 3}, {r: 2, c: 3}, {r: 3, c: 3}],
-  };
-
-  const faceStyle = {
-    ...styles.diceFace,
-    backgroundColor: isBlack ? '#222' : '#fff',
-  };
-
-  return (
-    <div style={faceStyle}>
-      {dotPositions[value]?.map((pos, i) => (
-        <div 
-          key={i} 
-          style={{
-            gridRow: pos.r, 
-            gridColumn: pos.c, 
-            alignSelf: 'center',
-            justifySelf: 'center',
-            ...styles.diceDot, 
-            backgroundColor: dotColor
-          }}
-        />
-      ))}
     </div>
   );
 };
@@ -1036,6 +1004,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '60px',
     height: '60px',
     borderRadius: '12px',
+    background: 'linear-gradient(160deg, #6d4c33, #4e342e)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1047,22 +1016,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     color: '#fff',
     textShadow: '0 2px 4px rgba(0,0,0,0.5)'
-  },
-  diceFace: {
-    width: '100%',
-    height: '100%',
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr',
-    gridTemplateRows: '1fr 1fr 1fr',
-    padding: '8px',
-    boxSizing: 'border-box',
-    boxShadow: 'inset 0 -3px 0 rgba(0,0,0,0.2)',
-  },
-  diceDot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.3)',
   },
   winnerDisplay: {
     textAlign: 'center',

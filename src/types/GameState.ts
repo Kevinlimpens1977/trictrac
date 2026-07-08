@@ -11,6 +11,16 @@ export interface PointState {
   count: number;
 }
 
+/** Laatste bord-gebeurtenis, voor animaties/geluid (synct mee in pvp). */
+export interface GameEvent {
+  type: 'move' | 'hit' | 'bearoff';
+  from: number;
+  to: number;
+  player: Player;
+  /** Oplopend volgnummer zodat de UI elke event precies één keer afspeelt */
+  seq: number;
+}
+
 export interface GameState {
   screen: Screen;
   mode: GameMode;
@@ -54,6 +64,9 @@ export interface GameState {
 
   winner: Player | null;
   msg: string;
+
+  /** Laatste zet/hit/bear-off, voor animaties en geluid */
+  lastEvent?: GameEvent | null;
 
   /** History of states during the current turn, used for undoing moves. */
   history: GameState[];

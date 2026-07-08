@@ -51,6 +51,7 @@ export function createInitialState(): GameState {
     validTos: [],
     winner: null,
     msg: 'Welkom bij Tric-Trac!',
+    lastEvent: null,
     history: [],
     isRolling: false,
     stats: {
@@ -203,6 +204,9 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'END_ROLL_ANIMATION': {
+      // Guard tegen dubbel dispatchen (skip-tap + de reguliere timeout)
+      if (!state.isRolling) return state;
+
       const newState = { ...state, isRolling: false };
       const autoSelect = state.diceSets.length === 1;
 
@@ -326,6 +330,9 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
       if (action.from !== 0 && action.to !== 25 && state.selected === null) return state;
 
       const player = state.turn;
+      // Vóór de zet vaststellen of dit een hit wordt (voor lastEvent)
+      const targetBefore = action.to !== 25 ? state.points[action.to] : null;
+      const isHitMove = targetBefore !== null && targetBefore.owner !== player;
       let dieUsed: number = -1;
 
       if (action.from === 0) {
@@ -380,7 +387,19 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
         };
       }
       
-      newState = { ...newState, selected: null, validTos: [], history: [...state.history, historyState] };
+      newState = {
+        ...newState,
+        selected: null,
+        validTos: [],
+        history: [...state.history, historyState],
+        lastEvent: {
+          type: (action.to === 25 ? 'bearoff' : (isHitMove ? 'hit' : 'move')) as 'move' | 'hit' | 'bearoff',
+          from: action.from,
+          to: action.to,
+          player,
+          seq: (state.lastEvent?.seq ?? 0) + 1,
+        },
+      };
 
       const winner = checkWinner(newState);
       if (winner) {

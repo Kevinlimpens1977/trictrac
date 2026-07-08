@@ -11,6 +11,8 @@ import { startAILoop } from './engine/aiEngine';
 import { getBarCount, getEntryPoint, canLandOn, canBearOff, getValidMoves } from './engine/moveEngine';
 import { isPlayerSetupDone } from './engine/setupEngine';
 import type { GameMode, Player, GameState } from './types/GameState';
+import { DiceRoller } from './components/DiceRoller';
+import { playPieceMove, playHit, playBearOff, vibrate } from './audio/sound';
 import { db } from './firebase';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import './App.css';
@@ -85,46 +87,50 @@ function App() {
 
   const [exitingPieces, setExitingPieces] = useState<{ id: string, player: Player, point: number }[]>([]);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
-  const prevPointsRef = useRef(state.points);
 
+  /* Reageer op expliciete bord-events uit de reducer (geen state-diffing
+     meer: een hit kan zo nooit meer als bear-off worden gelezen). */
+  const lastEventSeqRef = useRef(0);
   useEffect(() => {
-    const prev = prevPointsRef.current;
-    const current = state.points;
-    let exitedPoint = -1;
-    let playerExited: Player | null = null;
-
-    let totalPrev = 0;
-    let totalCurr = 0;
-
-    prev.forEach(p => totalPrev += p ? p.count : 0);
-    current.forEach(p => totalCurr += p ? p.count : 0);
-
-    if (totalCurr < totalPrev) {
-      for (let i = 1; i <= 24; i++) {
-        const p1 = prev[i];
-        const p2 = current[i];
-        if (p1 && (!p2 || p2.count < p1.count)) {
-          exitedPoint = i;
-          playerExited = p1.owner;
-          break;
-        }
-      }
+    const ev = state.lastEvent;
+    if (!ev) return;
+    if (ev.seq <= lastEventSeqRef.current) {
+      lastEventSeqRef.current = ev.seq; // undo: teller terugzetten, niet opnieuw afspelen
+      return;
     }
+    lastEventSeqRef.current = ev.seq;
 
-    if (exitedPoint !== -1 && playerExited) {
-      const newExiting = { id: Math.random().toString(), player: playerExited, point: exitedPoint };
-      setExitingPieces(prevEx => [...prevEx, newExiting]);
-      
+    if (ev.type === 'move') {
+      playPieceMove();
+    } else if (ev.type === 'hit') {
+      playHit();
+      vibrate([40, 60, 40]);
+    } else if (ev.type === 'bearoff') {
+      playBearOff();
+      vibrate(60);
+      const exiting = { id: `${ev.seq}`, player: ev.player, point: ev.from };
+      setExitingPieces(prev => [...prev, exiting]);
       setTimeout(() => {
-        setExitingPieces(ex => ex.filter(p => p.id !== newExiting.id));
-      }, 1500); // Exiting animation duration
+        setExitingPieces(ex => ex.filter(pc => pc.id !== exiting.id));
+      }, 1500);
     }
-
-    prevPointsRef.current = current;
-  }, [state.points]);
+  }, [state.lastEvent]);
 
   const remainingStones = state.points.reduce((acc, p) => p && p.owner === state.turn ? acc + p.count : acc, 0);
   const isClimax = canBearOff(state, state.turn) && remainingStones <= 3 && remainingStones > 0;
+
+  /* Instelling: automatisch uitspelen (bear-off). Default aan. */
+  const [autoBearOff, setAutoBearOff] = useState(() => {
+    try { return localStorage.getItem('tt-autobearoff') !== '0'; } catch { return true; }
+  });
+  const autoBearOffRef = useRef(autoBearOff);
+  autoBearOffRef.current = autoBearOff;
+  const toggleAutoBearOff = useCallback(() => {
+    setAutoBearOff(prev => {
+      try { localStorage.setItem('tt-autobearoff', prev ? '0' : '1'); } catch { /* private mode */ }
+      return !prev;
+    });
+  }, []);
 
   /* ─── AI loop ─── */
   useEffect(() => {
@@ -160,8 +166,8 @@ function App() {
       return () => clearTimeout(timer);
     }
 
-    // Auto bear-off (Euforisch einde)
-    if (!isSetup && canBearOff(state, state.turn) && state.remainingDice.length > 0) {
+    // Auto bear-off (Euforisch einde) — alleen als de instelling aan staat
+    if (!isSetup && autoBearOff && canBearOff(state, state.turn) && state.remainingDice.length > 0) {
       const allMoves: { from: number, to: number }[] = [];
       
       for (let i = 1; i <= 24; i++) {
@@ -187,7 +193,7 @@ function App() {
         return () => clearTimeout(timer);
       }
     }
-  }, [state.validTos, state.isRolling, state.screen, state.turn, state.mode, state.remainingDice, state.points]);
+  }, [state.validTos, state.isRolling, state.screen, state.turn, state.mode, state.remainingDice, state.points, autoBearOff, isClimax, remainingStones]);
 
   /* ─── Roll Animation ─── */
   useEffect(() => {
@@ -199,7 +205,7 @@ function App() {
 
       const t = setTimeout(() => {
         dispatch({ type: 'END_ROLL_ANIMATION' });
-      }, 2000);
+      }, 1200);
       return () => clearTimeout(t);
     }
   }, [state.isRolling]);
@@ -224,9 +230,15 @@ function App() {
 
   const handlePointClick = useCallback((point: number) => {
     const s = stateRef.current;
-    
+
     // Prevent interaction if it's a multiplayer game and it's the opponent's turn
     if (s.mode === 'pvp' && s.localPlayer && s.localPlayer !== s.turn) {
+      return;
+    }
+
+    // Tap tijdens de worp-animatie = animatie overslaan
+    if (s.isRolling) {
+      dispatch({ type: 'END_ROLL_ANIMATION' });
       return;
     }
 
@@ -240,8 +252,14 @@ function App() {
 
     // Move phase
     if (!isSetup) {
-      if (canBearOff(s, s.turn)) {
-        // Bear-off is now fully automated via useEffect. Manual clicking is disabled here.
+      if (canBearOff(s, s.turn) && autoBearOffRef.current) {
+        // Automatisch uitspelen staat aan; de useEffect speelt de zetten
+        return;
+      }
+
+      // Handmatig uitspelen: tweede tik op het geselecteerde punt speelt de steen uit
+      if (s.selected === point && s.validTos.includes(25)) {
+        dispatch({ type: 'MOVE_PIECE', from: point, to: 25 });
         return;
       }
 
@@ -258,6 +276,12 @@ function App() {
 
   const handleBarClick = useCallback(() => {
     const s = stateRef.current;
+    if (s.isRolling) {
+      if (!(s.mode === 'pvp' && s.localPlayer && s.localPlayer !== s.turn)) {
+        dispatch({ type: 'END_ROLL_ANIMATION' });
+      }
+      return;
+    }
     if (s.phase !== 'move') return;
 
     // Prevent interaction if it's a multiplayer game and it's the opponent's turn
@@ -291,9 +315,17 @@ function App() {
 
   /* ─── Keyboard Listeners ─── */
   const [showDevTools, setShowDevTools] = useState(false);
+  const introSeen = () => {
+    try { return sessionStorage.getItem('tt-intro-seen') === '1'; } catch { return false; }
+  };
   const [introPhase, setIntroPhase] = useState<'intro' | 'game'>(() => {
-    return window.location.search.includes('start_pva=1') || window.location.search.includes('test=1') ? 'game' : 'intro';
+    if (window.location.search.includes('start_pva=1') || window.location.search.includes('test=1')) return 'game';
+    return introSeen() ? 'game' : 'intro';
   });
+  const finishIntro = useCallback(() => {
+    try { sessionStorage.setItem('tt-intro-seen', '1'); } catch { /* private mode */ }
+    setIntroPhase('game');
+  }, []);
   const [isMobilePortrait, setIsMobilePortrait] = useState(() => {
     return window.matchMedia('(max-width: 700px) and (orientation: portrait)').matches;
   });
@@ -316,7 +348,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (state.screen === 'menu') {
+    if (state.screen === 'menu' && !introSeen()) {
       setIntroPhase('intro');
     }
   }, [state.screen]);
@@ -373,25 +405,45 @@ function App() {
           onBarClick={introPhase === 'intro' ? () => {} : handleBarClick}
           exitingPieces={exitingPieces}
           isClimax={isClimax}
+          flightEvent={state.lastEvent}
         >
           {introPhase === 'intro' && (
-             <video 
+            <div
+              onPointerUp={finishIntro}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                zIndex: 100,
+                cursor: 'pointer',
+              }}
+            >
+              <video
                 src="/afbeeldingen/bordopenen.mp4"
                 autoPlay
                 muted
                 playsInline
-                onEnded={() => setIntroPhase('game')}
+                onEnded={finishIntro}
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
                   width: '100%',
                   height: '100%',
-                  objectFit: 'fill',
-                  zIndex: 100,
+                  objectFit: 'cover',
                   pointerEvents: 'none',
                 }}
-             />
+              />
+              <button onClick={finishIntro} style={styles.skipIntroBtn} aria-label="Intro overslaan">
+                Overslaan ▸
+              </button>
+            </div>
+          )}
+
+          {/* Worp-animatie op het bord (midden linkerhelft) */}
+          {introPhase === 'game' && (
+            <div className="board-dice-overlay">
+              <DiceRoller isRolling={state.isRolling} dice={state.rawDice} />
+            </div>
           )}
 
           {/* Inject HUD over the right section of the board */}
@@ -403,6 +455,8 @@ function App() {
                 onRollDice={handleRollDice}
                 onUndo={(stepsBack) => dispatch({ type: 'UNDO', stepsBack })}
                 onLeaveGame={() => setShowLeaveConfirm(true)}
+                autoBearOff={autoBearOff}
+                onToggleAutoBearOff={toggleAutoBearOff}
               />
             </div>
           )}
@@ -417,6 +471,8 @@ function App() {
             onRollDice={handleRollDice}
             onUndo={(stepsBack) => dispatch({ type: 'UNDO', stepsBack })}
             onLeaveGame={() => setShowLeaveConfirm(true)}
+            autoBearOff={autoBearOff}
+            onToggleAutoBearOff={toggleAutoBearOff}
           />
         </div>
       )}
@@ -481,6 +537,22 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  skipIntroBtn: {
+    position: 'absolute',
+    right: '3%',
+    bottom: '4%',
+    minHeight: '44px',
+    minWidth: '44px',
+    padding: '10px 20px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255,255,255,0.5)',
+    background: 'rgba(0,0,0,0.55)',
+    color: '#fff',
+    fontSize: '14px',
+    fontWeight: 700,
+    cursor: 'pointer',
+    backdropFilter: 'blur(3px)',
   },
   devPanel: {
     position: 'absolute',

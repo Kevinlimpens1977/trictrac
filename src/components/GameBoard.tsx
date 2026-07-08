@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BOARD_LAYOUT,
   PIECE_RADIUS,
@@ -10,7 +10,7 @@ import {
   TOP_BASE,
   TOP_TIP,
 } from '../constants/boardLayout';
-import type { GameState } from '../types/GameState';
+import type { GameState, GameEvent, Player } from '../types/GameState';
 import { canBearOff } from '../engine/moveEngine';
 
 
@@ -20,8 +20,48 @@ interface GameBoardProps {
   onBarClick: () => void;
   exitingPieces?: { id: string, player: 'B' | 'W', point: number }[];
   isClimax?: boolean;
+  /** Laatste zet/hit — hierop worden vliegende stenen geanimeerd */
+  flightEvent?: GameEvent | null;
   children?: React.ReactNode;
 }
+
+interface Flight {
+  id: string;
+  player: Player;
+  fx: number;
+  fy: number;
+  tx: number;
+  ty: number;
+}
+
+/** Vliegende steen: glijdt in ~0.28s van from naar to (SVG user units) */
+const FlightPiece: React.FC<Flight> = ({ player, fx, fy, tx, ty }) => {
+  const [go, setGo] = useState(false);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setGo(true)));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const isBlack = player === 'B';
+  return (
+    <g
+      style={{
+        transform: go ? `translate(${tx - fx}px, ${ty - fy}px)` : 'translate(0px, 0px)',
+        transition: 'transform 0.28s cubic-bezier(0.3, 0.7, 0.4, 1)',
+      }}
+    >
+      <circle cx={fx + 4} cy={fy + 4} r={PIECE_RADIUS - 2} fill="rgba(0,0,0,0.25)" />
+      <circle
+        cx={fx}
+        cy={fy}
+        r={PIECE_RADIUS - 2}
+        fill={isBlack ? '#2a2a2a' : '#f5f0e8'}
+        stroke={isBlack ? '#777' : '#c4b99a'}
+        strokeWidth={4}
+      />
+    </g>
+  );
+};
 
 /**
  * Calculate Y center of a piece in a stack.
@@ -72,16 +112,59 @@ function hitTest(px: number, py: number): { type: 'point' | 'bar' | 'none'; id: 
   return { type: 'none', id: 0 };
 }
 
-export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBarClick, exitingPieces, isClimax, children }) => {
+export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBarClick, exitingPieces, isClimax, flightEvent, children }) => {
   const layout = BOARD_LAYOUT;
   const containerRef = useRef<HTMLDivElement>(null);
 
-  if (!state || !state.points) {
-    return <div style={{ color: '#fff', padding: 40 }}>Laden...</div>;
-  }
+  /* ─── Vliegende stenen bij zetten en hits ─── */
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const flightSeqRef = useRef(0);
 
-  const isBearOff = canBearOff(state, state.turn);
-  const triH = BOTTOM_BASE - BOTTOM_TIP;
+  useEffect(() => {
+    const ev = flightEvent;
+    if (!ev) return;
+    if (ev.seq <= flightSeqRef.current) {
+      flightSeqRef.current = ev.seq;
+      return;
+    }
+    flightSeqRef.current = ev.seq;
+    if (ev.type !== 'move' && ev.type !== 'hit') return; // bear-off heeft eigen animatie
+
+    // Positie in image-space; state is de POST-move stand.
+    const posOfPoint = (pid: number, role: 'from' | 'to') => {
+      const pt = BOARD_LAYOUT.points.find((p) => p.id === pid);
+      if (!pt) return null;
+      const count = state.points[pid]?.count ?? 0;
+      const index = role === 'to' ? Math.max(count - 1, 0) : count; // verwijderde steen zat bovenop
+      return { x: pt.x, y: getPieceY(pt.isTop, index, Math.max(count, index + 1)) };
+    };
+    const barPos = (player: Player) => ({ x: BOARD_LAYOUT.bar.x, y: player === 'B' ? 360 : 440 });
+
+    const from = ev.from === 0 ? barPos(ev.player) : posOfPoint(ev.from, 'from');
+    const to = posOfPoint(ev.to, 'to');
+    if (!from || !to) return;
+
+    const newFlights: Flight[] = [{
+      id: `${ev.seq}-m`,
+      player: ev.player,
+      fx: from.x, fy: from.y, tx: to.x, ty: to.y,
+    }];
+
+    if (ev.type === 'hit') {
+      const opp: Player = ev.player === 'B' ? 'W' : 'B';
+      const oppBar = barPos(opp);
+      newFlights.push({
+        id: `${ev.seq}-h`,
+        player: opp,
+        fx: to.x, fy: to.y, tx: oppBar.x, ty: oppBar.y,
+      });
+    }
+
+    setFlights((f) => [...f, ...newFlights]);
+    const ids = new Set(newFlights.map((f) => f.id));
+    const t = setTimeout(() => setFlights((f) => f.filter((x) => !ids.has(x.id))), 380);
+    return () => clearTimeout(t);
+  }, [flightEvent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Convert pointer-up to image-pixel coordinates and dispatch */
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -124,6 +207,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
       onBarClick();
     }
   }, [onPointClick, onBarClick, state]);
+
+  if (!state || !state.points) {
+    return <div style={{ color: '#fff', padding: 40 }}>Laden...</div>;
+  }
+
+  const isBearOff = canBearOff(state, state.turn);
+  const triH = BOTTOM_BASE - BOTTOM_TIP;
 
   return (
     <div
@@ -333,6 +423,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
           );
         })}
 
+        {/* ── Vliegende stenen (zet/hit-animatie) ── */}
+        {flights.map((f) => (
+          <FlightPiece key={f.id} {...f} />
+        ))}
 
       </svg>
       {children}
