@@ -31,7 +31,7 @@ function App() {
     if (window.location.search.includes('start_pva=1')) {
       return gameReducer(createInitialState(), { type: 'START_GAME', mode: 'pva' });
     }
-    if (window.location.search.includes('start_gameroom=1')) {
+    if (window.location.search.includes('start_gameroom=1') || window.location.search.includes('join=')) {
       return gameReducer(createInitialState(), { type: 'GO_TO_GAMEROOM' });
     }
     if (window.location.search.includes('start_gameover=1')) {
@@ -592,10 +592,12 @@ function App() {
   }
 
   if (state.screen === 'gameroom') {
+    const joinParam = new URLSearchParams(window.location.search).get('join');
     return (
       <Gameroom
         onBack={() => dispatch({ type: 'RESET' })}
         onStartMatch={handleStartMatch}
+        initialJoinId={joinParam ?? undefined}
       />
     );
   }

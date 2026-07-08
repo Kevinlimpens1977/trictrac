@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signInAnonymously, GoogleAuthProvider } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { auth } from '../firebase';
 import './AuthScreen.css';
@@ -33,6 +33,20 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
 
     return () => unsubscribe();
   }, [onAuthenticated]);
+
+  const handleGuestLogin = () => {
+    setLoading(true);
+    setStatus('');
+    signInAnonymously(auth)
+      .then((result) => {
+        onAuthenticated(result.user);
+      })
+      .catch((error) => {
+        console.error('Error signing in anonymously', error);
+        setStatus('Gastmodus is momenteel niet beschikbaar.');
+        setLoading(false);
+      });
+  };
 
   const handleGoogleLogin = () => {
     setLoading(true);
@@ -72,6 +86,10 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
             style={styles.googleIcon} 
           />
           Doorgaan met Google
+        </button>
+
+        <button onClick={handleGuestLogin} style={styles.guestButton}>
+          Speel als gast
         </button>
 
         {status && <div style={styles.status}>{status}</div>}
@@ -126,6 +144,18 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     transition: 'transform 0.2s, background 0.2s',
     boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+  },
+  guestButton: {
+    width: '100%',
+    minHeight: '44px',
+    padding: '10px 24px',
+    borderRadius: '12px',
+    border: '2px dashed rgba(0,0,0,0.25)',
+    background: 'transparent',
+    color: '#5c3a21',
+    fontWeight: 'bold',
+    fontSize: '15px',
+    cursor: 'pointer',
   },
   googleIcon: {
     width: '24px',

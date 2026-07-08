@@ -7,6 +7,8 @@ import { Die } from './Die';
 interface GameroomProps {
   onBack: () => void;
   onStartMatch: (mode: GameMode, playerNames?: { B: string, W: string }, gameId?: string, starter?: Player, localPlayer?: Player) => void;
+  /** Vooringevuld game-id vanuit een ?join=XXXXX deel-link */
+  initialJoinId?: string;
 }
 
 type RoomState = 'lobby' | 'toss';
@@ -19,15 +21,15 @@ function waitingLabel(createdAt?: number): string {
   return mins === 0 ? 'zojuist' : `${mins} min geleden`;
 }
 
-export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
+export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, initialJoinId }) => {
   const [roomState, setRoomState] = useState<RoomState>('lobby');
-  const [lobbyMode, setLobbyMode] = useState<LobbyMode>('menu');
+  const [lobbyMode, setLobbyMode] = useState<LobbyMode>(initialJoinId ? 'online' : 'menu');
   
   const [p1Name, setP1Name] = useState('Speler 1');
   const [p2Name, setP2Name] = useState('Speler 2');
   
   const [gameId, setGameId] = useState('');
-  const [joinId, setJoinId] = useState('');
+  const [joinId, setJoinId] = useState(initialJoinId ? initialJoinId.toUpperCase() : '');
   const [isHost, setIsHost] = useState(true);
   const [isWaiting, setIsWaiting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -626,6 +628,19 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                         <div style={styles.idDisplay}>
                           {gameId}
                           <button onClick={() => navigator.clipboard.writeText(gameId)} style={styles.copyBtn}>Copy</button>
+                          <button
+                            onClick={() => {
+                              const url = `${window.location.origin}?join=${gameId}`;
+                              if (navigator.share) {
+                                navigator.share({ title: 'Tric-Trac', text: 'Speel een potje Tric-Trac met mij!', url }).catch(() => {});
+                              } else {
+                                navigator.clipboard.writeText(url);
+                              }
+                            }}
+                            style={styles.copyBtn}
+                          >
+                            Deel link
+                          </button>
                         </div>
                       </div>
                       <div style={styles.compactRow}>
