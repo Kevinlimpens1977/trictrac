@@ -243,6 +243,28 @@ function App() {
     });
   }, []);
 
+  /* ─── Online turn-timer: 60s per beurt in pvp ─── */
+  const [turnRemaining, setTurnRemaining] = useState<number | null>(null);
+  useEffect(() => {
+    if (!(state.mode === 'pvp' && state.gameId && state.screen === 'game')) {
+      setTurnRemaining(null);
+      return;
+    }
+    const TURN_SECONDS = 60;
+    const tick = () => {
+      const started = state.turnStartedAt ?? Date.now();
+      const remain = Math.max(0, TURN_SECONDS - Math.floor((Date.now() - started) / 1000));
+      setTurnRemaining(remain);
+      // Alleen de client van de actieve speler geeft de beurt op
+      if (remain === 0 && state.localPlayer === state.turn && !state.isRolling) {
+        dispatch({ type: 'FORFEIT_TURN', reason: 'Tijd om! Beurt verloren.' });
+      }
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [state.mode, state.gameId, state.screen, state.turnStartedAt, state.turn, state.localPlayer, state.isRolling]);
+
   /* ─── AI loop ─── */
   useEffect(() => {
     if (state.mode !== 'pva' || state.screen !== 'game') return;
@@ -658,6 +680,7 @@ function App() {
                 onLeaveGame={() => setShowLeaveConfirm(true)}
                 autoBearOff={autoBearOff}
                 onToggleAutoBearOff={toggleAutoBearOff}
+                turnRemaining={turnRemaining}
               />
             </div>
           )}
@@ -674,6 +697,7 @@ function App() {
             onLeaveGame={() => setShowLeaveConfirm(true)}
             autoBearOff={autoBearOff}
             onToggleAutoBearOff={toggleAutoBearOff}
+            turnRemaining={turnRemaining}
           />
         </div>
       )}

@@ -52,6 +52,7 @@ export function createInitialState(): GameState {
     winner: null,
     msg: 'Welkom bij Tric-Trac!',
     lastEvent: null,
+    turnStartedAt: Date.now(),
     history: [],
     isRolling: false,
     stats: {
@@ -86,6 +87,7 @@ function nextTurn(state: GameState): GameState {
     validTos: [],
     history: [],
     isRolling: false,
+    turnStartedAt: Date.now(),
     msg: `${playerName(next)} is aan de beurt. Gooi de dobbelstenen.`,
   };
 }
@@ -102,6 +104,7 @@ function handleEndOfActions(state: GameState): GameState {
         remainingDice: [],
         selected: null,
         validTos: [],
+        turnStartedAt: Date.now(), // verse beurtklok voor de bonusworp
         msg: `Actie voltooid! ${playerName(state.turn)} mag nogmaals gooien (Dubbel of Tric-Trac).`,
       };
     }

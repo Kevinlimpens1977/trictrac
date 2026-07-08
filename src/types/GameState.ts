@@ -68,6 +68,9 @@ export interface GameState {
   /** Laatste zet/hit/bear-off, voor animaties en geluid */
   lastEvent?: GameEvent | null;
 
+  /** Start van de huidige beurt (ms epoch) — basis voor de online turn-timer */
+  turnStartedAt?: number;
+
   /** History of states during the current turn, used for undoing moves. */
   history: GameState[];
   /** Flag to indicate if dice are currently rolling (animation state) */

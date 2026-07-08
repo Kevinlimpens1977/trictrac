@@ -12,9 +12,11 @@ interface GameHUDProps {
   turn?: string;
   autoBearOff?: boolean;
   onToggleAutoBearOff?: () => void;
+  /** Resterende beurtseconden (alleen online pvp), null = geen timer */
+  turnRemaining?: number | null;
 }
 
-export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onLeaveGame, localPlayer, autoBearOff = true, onToggleAutoBearOff }) => {
+export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onLeaveGame, localPlayer, autoBearOff = true, onToggleAutoBearOff, turnRemaining }) => {
   const [muted, setMuted] = useState(isMuted());
   const isBlack = state.turn === 'B';
   const colorName = isBlack ? 'Zwart' : 'Wit';
@@ -43,6 +45,18 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
             boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
           }} />
           <span style={styles.turnLabel}>{turnLabelText}</span>
+          {turnRemaining != null && turnRemaining <= 20 && (
+            <span
+              style={{
+                ...styles.timerBadge,
+                background: turnRemaining <= 10 ? '#c62828' : '#ef6c00',
+              }}
+              role="timer"
+              aria-label={`Nog ${turnRemaining} seconden`}
+            >
+              {turnRemaining}s
+            </span>
+          )}
         </div>
         <button
           onClick={() => setMuted(toggleMuted())}
@@ -254,6 +268,15 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     borderRadius: '3px',
     transition: 'width 0.3s ease',
+  },
+  timerBadge: {
+    minWidth: '34px',
+    padding: '3px 8px',
+    borderRadius: '999px',
+    color: '#fff',
+    fontWeight: 800,
+    fontSize: '13px',
+    textAlign: 'center',
   },
   muteButton: {
     width: '44px',
