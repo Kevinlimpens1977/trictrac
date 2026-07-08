@@ -12,6 +12,7 @@ import { getBarCount, getEntryPoint, canLandOn, canBearOff, getValidMoves } from
 import { isPlayerSetupDone } from './engine/setupEngine';
 import type { GameMode, Player, GameState } from './types/GameState';
 import { DiceRoller } from './components/DiceRoller';
+import { Coach } from './components/Coach';
 import { playPieceMove, playHit, playBearOff, vibrate } from './audio/sound';
 import { db } from './firebase';
 import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
@@ -588,6 +589,8 @@ function App() {
         </div>
       )}
       
+      {introPhase === 'game' && state.screen === 'game' && <Coach state={state} />}
+
       {state.screen === 'gameover' && state.winner && (
         <GameOverScreen winner={state.winner} stats={state.stats} onRestart={handleRestart} />
       )}
