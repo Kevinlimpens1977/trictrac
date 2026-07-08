@@ -22,6 +22,8 @@ interface GameBoardProps {
   isClimax?: boolean;
   /** Laatste zet/hit — hierop worden vliegende stenen geanimeerd */
   flightEvent?: GameEvent | null;
+  /** Punt met keyboard-focus (toegankelijkheid) */
+  focusPoint?: number | null;
   children?: React.ReactNode;
 }
 
@@ -112,7 +114,7 @@ function hitTest(px: number, py: number): { type: 'point' | 'bar' | 'none'; id: 
   return { type: 'none', id: 0 };
 }
 
-export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBarClick, exitingPieces, isClimax, flightEvent, children }) => {
+export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBarClick, exitingPieces, isClimax, flightEvent, focusPoint, children }) => {
   const layout = BOARD_LAYOUT;
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -220,6 +222,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
       className="game-board"
       ref={containerRef}
       onPointerUp={handlePointerUp}
+      role="application"
+      aria-label="Tric-Trac speelbord. Gebruik de pijltjestoetsen en Enter om stenen te verplaatsen, R om te gooien, U om terug te nemen."
       style={{
         position: 'relative',
         width: '100%',
@@ -297,20 +301,50 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
           
           const halfW = 18;
           const rectY = pt.isTop ? pt.yBase : pt.yBase - triH;
+          // ▼-marker bij de punt-tip: kleuronafhankelijk signaal voor geldige doelen
+          const markerY = pt.isTop ? TOP_TIP + 14 : BOTTOM_TIP - 14;
+          const markerDir = pt.isTop ? -8 : 8;
           return (
-            <rect
-              key={`hl-${ptId}`}
-              x={pt.x - halfW}
-              y={rectY}
-              width={halfW * 2}
-              height={triH}
-              fill="rgba(76, 175, 80, 0.18)"
-              stroke="rgba(76, 175, 80, 0.5)"
-              strokeWidth={4}
-              rx={8}
-            />
+            <g key={`hl-${ptId}`}>
+              <rect
+                x={pt.x - halfW}
+                y={rectY}
+                width={halfW * 2}
+                height={triH}
+                fill="rgba(76, 175, 80, 0.18)"
+                stroke="rgba(76, 175, 80, 0.5)"
+                strokeWidth={4}
+                rx={8}
+              />
+              <path
+                d={`M ${pt.x - 8} ${markerY} h 16 l -8 ${markerDir} z`}
+                fill="#1b5e20"
+                stroke="#fff"
+                strokeWidth={1.5}
+              />
+            </g>
           );
         })}
+
+        {/* ── Keyboard-focus ring ── */}
+        {focusPoint != null && (() => {
+          const pt = layout.points.find((p) => p.id === focusPoint);
+          if (!pt) return null;
+          const rectY = pt.isTop ? pt.yBase : pt.yBase - triH;
+          return (
+            <rect
+              x={pt.x - 20}
+              y={rectY - 4}
+              width={40}
+              height={triH + 8}
+              fill="none"
+              stroke="#1e87d6"
+              strokeWidth={4}
+              strokeDasharray="10 6"
+              rx={10}
+            />
+          );
+        })()}
 
         {/* ── Selected point highlight (yellow) ── */}
         {!isBearOff && state.selected !== null && (() => {

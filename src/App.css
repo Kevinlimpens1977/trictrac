@@ -101,8 +101,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hud-msg, .hud-msg--error {
-    animation: none;
+  .hud-msg, .hud-msg--error,
+  .piece-enter, .animate-piece-exit, .climax-piece,
+  .waiting-glow-white, .waiting-glow-black,
+  .rotate-hint, .board-dice {
+    animation: none !important;
+    transition: none !important;
   }
 }
 

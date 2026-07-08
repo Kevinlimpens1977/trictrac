@@ -739,8 +739,13 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           )}
         </div>
         {showHelp && (
-          <div className="gameRoomHelpDialog" role="dialog" aria-modal="true">
-            <button className="gameRoomHelpClose" onClick={() => setShowHelp(false)} aria-label="Sluit speluitleg">
+          <div
+            className="gameRoomHelpDialog"
+            role="dialog"
+            aria-modal="true"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowHelp(false); }}
+          >
+            <button className="gameRoomHelpClose" autoFocus onClick={() => setShowHelp(false)} aria-label="Sluit speluitleg">
               X
             </button>
             <h2>Speluitleg</h2>

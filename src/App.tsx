@@ -430,6 +430,65 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  /* ─── Keyboard-bediening van het bord (toegankelijkheid) ───
+     ←/→ loopt door eigen punten (of geldige doelen bij selectie),
+     Enter bevestigt, Esc deselecteert, R gooit, U neemt terug. */
+  const [kbFocus, setKbFocus] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (state.screen !== 'game') return;
+
+    const onKey = (e: KeyboardEvent) => {
+      const s = stateRef.current;
+      if (s.mode === 'pvp' && s.localPlayer && s.localPlayer !== s.turn) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      if (e.key === 'r' || e.key === 'R') {
+        if (!s.rawDice && !s.isRolling) dispatch({ type: 'ROLL_DICE' });
+        return;
+      }
+      if (e.key === 'u' || e.key === 'U') {
+        if (s.history.length > 0) dispatch({ type: 'UNDO', stepsBack: 1 });
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (s.selected !== null) dispatch({ type: 'SELECT_POINT', point: -1 });
+        setKbFocus(null);
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        const candidates = s.selected !== null && s.validTos.length > 0
+          ? [...s.validTos].filter(p => p >= 1 && p <= 24).sort((a, b) => a - b)
+          : Array.from({ length: 24 }, (_, i) => i + 1).filter(i => s.points[i]?.owner === s.turn);
+        if (candidates.length === 0) return;
+        setKbFocus(prev => {
+          const idx = prev !== null ? candidates.indexOf(prev) : -1;
+          return candidates[(idx + dir + candidates.length) % candidates.length];
+        });
+        return;
+      }
+      if (e.key === 'Enter' && kbFocus !== null) {
+        handlePointClick(kbFocus);
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [state.screen, kbFocus, handlePointClick]);
+
+  // Esc sluit de verlaat-dialoog
+  useEffect(() => {
+    if (!showLeaveConfirm) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowLeaveConfirm(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showLeaveConfirm]);
+
   useEffect(() => {
     if (state.screen === 'menu' && !introSeen()) {
       setIntroPhase('intro');
@@ -518,6 +577,7 @@ function App() {
           exitingPieces={exitingPieces}
           isClimax={isClimax}
           flightEvent={state.lastEvent}
+          focusPoint={kbFocus}
         >
           {introPhase === 'intro' && (
             <div
@@ -601,8 +661,9 @@ function App() {
             <h2 style={styles.modalTitle}>Spel Verlaten</h2>
             <p style={styles.modalText}>Weet je zeker dat je het spel wilt verlaten? Je keert terug naar het beginscherm en de huidige voortgang gaat verloren.</p>
             <div style={styles.modalActions}>
-              <button 
-                style={styles.modalBtnCancel} 
+              <button
+                style={styles.modalBtnCancel}
+                autoFocus
                 onClick={() => setShowLeaveConfirm(false)}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}

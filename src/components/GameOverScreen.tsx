@@ -36,6 +36,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, stats, o
 
   useEffect(() => {
     if (step !== 'victory') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
 
     const duration = 5000;
     const animationEnd = Date.now() + duration;
