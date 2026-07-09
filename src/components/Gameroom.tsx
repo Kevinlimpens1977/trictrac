@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import gsap from 'gsap';
 import { db } from '../firebase';
 import { doc, setDoc, getDoc, onSnapshot, updateDoc, collection, query, where, limit } from 'firebase/firestore';
 import type { GameMode, Player } from '../types/GameState';
 import type { PlayerStats } from '../stats';
 import { Die } from './Die';
+import { prefersReducedMotion } from '../anim/motion';
 
 interface GameroomProps {
   onBack: () => void;
@@ -51,6 +53,47 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, onStartCompute
   const [tossWinner, setTossWinner] = useState<Player | null>(null);
   const [isOnlineMode, setIsOnlineMode] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+
+  /* --- GSAP: paneel-overgangen in de lobby (menu <-> lokaal <-> online) --- */
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay || prefersReducedMotion()) return;
+    const panel = overlay.firstElementChild;
+    if (!panel) return;
+    const tween = gsap.fromTo(panel,
+      { x: 26, opacity: 0 },
+      { x: 0, opacity: 1, duration: 0.32, ease: 'power3.out', clearProps: 'transform,opacity' });
+    return () => { tween.kill(); };
+  }, [lobbyMode, roomState]);
+
+  /* --- GSAP: toss-onthulling: winnaarsteen groeit met gloed, verliezer dimt --- */
+  const tossAreaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const area = tossAreaRef.current;
+    if (!area || !tossWinner || prefersReducedMotion()) return;
+    const winEl = area.querySelector('[data-toss="' + tossWinner + '"]');
+    const loseEl = area.querySelector('[data-toss="' + (tossWinner === 'B' ? 'W' : 'B') + '"]');
+    const label = area.querySelector('[data-toss-winner]');
+    const tweens: gsap.core.Tween[] = [];
+    if (winEl) {
+      tweens.push(gsap.fromTo(winEl,
+        { scale: 1 },
+        { scale: 1.22, duration: 0.45, ease: 'back.out(2.4)' }));
+      tweens.push(gsap.fromTo(winEl,
+        { filter: 'drop-shadow(0 0 0 rgba(255,215,0,0))' },
+        { filter: 'drop-shadow(0 0 14px rgba(255,215,0,0.85))', duration: 0.45, ease: 'power2.out' }));
+    }
+    if (loseEl) {
+      tweens.push(gsap.to(loseEl, { opacity: 0.45, scale: 0.92, duration: 0.4, ease: 'power2.out' }));
+    }
+    if (label) {
+      tweens.push(gsap.fromTo(label,
+        { scale: 0.6, opacity: 0, y: 8 },
+        { scale: 1, opacity: 1, y: 0, duration: 0.5, ease: 'back.out(2.2)', delay: 0.15 }));
+    }
+    return () => { tweens.forEach((t) => t.kill()); };
+  }, [tossWinner]);
 
   // Generate a random 5-character ID for hosting
   useEffect(() => {
@@ -627,7 +670,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, onStartCompute
             <span>{career.played} gespeeld</span>
           </div>
         )}
-        <div className="gameRoomOverlay">
+        <div className="gameRoomOverlay" ref={overlayRef}>
           {roomState === 'lobby' && (
             <>
             {lobbyMode === 'menu' && (
@@ -779,12 +822,12 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, onStartCompute
           )}
 
           {roomState === 'toss' && (
-            <div style={styles.tossContainer}>
+            <div style={styles.tossContainer} ref={tossAreaRef}>
               <h2 style={styles.columnTitle}>De Toss</h2>
               <p style={styles.text}>Wie gooit het hoogst en begint?</p>
               
               <div style={styles.tossDisplay}>
-                <div style={styles.playerToss}>
+                <div style={styles.playerToss} data-toss="B">
                   <p style={styles.playerName}>{p1Name} (Zwart)</p>
                   {tossP1 !== null ? (
                     <Die value={tossP1} color="black" size={60} rolling={isTossing} />
@@ -792,7 +835,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, onStartCompute
                     <div style={styles.tossDie}><span style={styles.questionMark}>?</span></div>
                   )}
                 </div>
-                <div style={styles.playerToss}>
+                <div style={styles.playerToss} data-toss="W">
                   <p style={styles.playerName}>{p2Name} (Wit)</p>
                   {tossP2 !== null ? (
                     <Die value={tossP2} color="white" size={60} rolling={isTossing} />
@@ -813,7 +856,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, onStartCompute
               )}
               
               {tossWinner && (
-                <div style={styles.winnerDisplay}>
+                <div style={styles.winnerDisplay} data-toss-winner>
                   <h3>{tossWinner === 'B' ? p1Name : p2Name} Wint!</h3>
                   <p style={styles.text}>Spel start zo...</p>
                 </div>

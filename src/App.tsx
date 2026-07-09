@@ -13,6 +13,7 @@ import { isPlayerSetupDone } from './engine/setupEngine';
 import type { GameMode, Player, GameState } from './types/GameState';
 import { DiceRoller } from './components/DiceRoller';
 import { Coach } from './components/Coach';
+import { GameBanner } from './components/GameBanner';
 import { loadStats, recordGame, type PlayerStats } from './stats';
 import { playPieceMove, playHit, playBearOff, vibrate } from './audio/sound';
 import { db, auth } from './firebase';
@@ -733,6 +734,9 @@ function App() {
               <DiceRoller isRolling={state.isRolling} dice={state.rawDice} />
             </div>
           )}
+
+          {/* Bord-banners: beurtwissel + DUBBEL!/TRIC-TRAC! */}
+          {introPhase === 'game' && <GameBanner state={state} />}
 
           {/* Inject HUD over the right section of the board */}
           {introPhase === 'game' && !isMobilePortrait && (

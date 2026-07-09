@@ -10,9 +10,11 @@ import {
   TOP_BASE,
   TOP_TIP,
 } from '../constants/boardLayout';
+import gsap from 'gsap';
 import type { GameState, GameEvent, Player } from '../types/GameState';
 import { canBearOff } from '../engine/moveEngine';
 import { isPlayerSetupDone } from '../engine/setupEngine';
+import { prefersReducedMotion } from '../anim/motion';
 
 
 interface GameBoardProps {
@@ -37,31 +39,137 @@ interface Flight {
   ty: number;
 }
 
-/** Vliegende steen: glijdt in ~0.28s van from naar to (SVG user units) */
+/** Vliegende steen (GSAP): boogje met aparte grond-schaduw en een
+    subtiele squash bij de landing — voelt fysiek i.p.v. glijdend. */
 const FlightPiece: React.FC<Flight> = ({ player, fx, fy, tx, ty }) => {
-  const [go, setGo] = useState(false);
+  const pieceRef = useRef<SVGGElement>(null);
+  const shadowRef = useRef<SVGCircleElement>(null);
+
   useEffect(() => {
-    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setGo(true)));
-    return () => cancelAnimationFrame(raf);
+    const piece = pieceRef.current;
+    const shadow = shadowRef.current;
+    if (!piece || !shadow) return;
+
+    if (prefersReducedMotion()) {
+      gsap.set([piece, shadow], { x: tx - fx, y: ty - fy });
+      return;
+    }
+
+    const dist = Math.hypot(tx - fx, ty - fy);
+    const arc = Math.min(36, 12 + dist * 0.1);
+    const o = { t: 0 };
+    const tween = gsap.to(o, {
+      t: 1,
+      duration: 0.32,
+      ease: 'power1.inOut',
+      onUpdate() {
+        const t = o.t;
+        const lift = Math.sin(Math.PI * t);
+        gsap.set(piece, { x: (tx - fx) * t, y: (ty - fy) * t - lift * arc });
+        gsap.set(shadow, {
+          x: (tx - fx) * t,
+          y: (ty - fy) * t,
+          scale: 1 - lift * 0.35,
+          opacity: 1 - lift * 0.45,
+          transformOrigin: '50% 50%',
+        });
+      },
+      onComplete() {
+        gsap.fromTo(piece,
+          { scaleY: 0.8, scaleX: 1.18, transformOrigin: '50% 50%' },
+          { scaleY: 1, scaleX: 1, duration: 0.2, ease: 'power2.out' });
+      },
+    });
+    return () => { tween.kill(); };
+  }, [fx, fy, tx, ty]);
+
+  return (
+    <g>
+      <circle ref={shadowRef} cx={fx + 4} cy={fy + 4} r={PIECE_RADIUS - 2} fill="rgba(0,0,0,0.25)" />
+      <g ref={pieceRef}>
+        <circle
+          cx={fx}
+          cy={fy}
+          r={PIECE_RADIUS - 2}
+          fill={player === 'B' ? 'url(#pieceB)' : 'url(#pieceW)'}
+          stroke={player === 'B' ? '#777' : '#c4b99a'}
+          strokeWidth={4}
+        />
+      </g>
+    </g>
+  );
+};
+
+/** Impact-burst op het punt waar een steen geslagen wordt */
+const ImpactBurst: React.FC<{ x: number; y: number }> = ({ x, y }) => {
+  const ref = useRef<SVGGElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || prefersReducedMotion()) return;
+    const ring = el.querySelector('.imp-ring');
+    const sparks = el.querySelectorAll('.imp-spark');
+    if (ring) {
+      gsap.fromTo(ring,
+        { scale: 0.2, opacity: 0.9, transformOrigin: '50% 50%' },
+        { scale: 2.1, opacity: 0, duration: 0.45, ease: 'power2.out' });
+    }
+    sparks.forEach((sp, i) => {
+      const a = (i / sparks.length) * Math.PI * 2;
+      gsap.fromTo(sp,
+        { x: 0, y: 0, opacity: 1 },
+        { x: Math.cos(a) * 30, y: Math.sin(a) * 30, opacity: 0, duration: 0.4, ease: 'power2.out' });
+    });
   }, []);
 
-  const isBlack = player === 'B';
   return (
-    <g
-      style={{
-        transform: go ? `translate(${tx - fx}px, ${ty - fy}px)` : 'translate(0px, 0px)',
-        transition: 'transform 0.28s cubic-bezier(0.3, 0.7, 0.4, 1)',
-      }}
-    >
-      <circle cx={fx + 4} cy={fy + 4} r={PIECE_RADIUS - 2} fill="rgba(0,0,0,0.25)" />
-      <circle
-        cx={fx}
-        cy={fy}
-        r={PIECE_RADIUS - 2}
-        fill={isBlack ? 'url(#pieceB)' : 'url(#pieceW)'}
-        stroke={isBlack ? '#777' : '#c4b99a'}
-        strokeWidth={4}
-      />
+    <g ref={ref} pointerEvents="none">
+      <circle className="imp-ring" cx={x} cy={y} r={16} fill="none" stroke="#ff5252" strokeWidth={4} />
+      {Array.from({ length: 6 }).map((_, i) => (
+        <circle key={i} className="imp-spark" cx={x} cy={y} r={3.5} fill="#ffca28" />
+      ))}
+    </g>
+  );
+};
+
+/** Groen doelkader dat zichzelf 'tekent' + dobberend richtingspijltje */
+const TargetHighlight: React.FC<{
+  x: number; y: number; w: number; h: number;
+  markerPath: string; markerDir: number;
+}> = ({ x, y, w, h, markerPath, markerDir }) => {
+  const strokeRef = useRef<SVGRectElement>(null);
+  const fillRef = useRef<SVGRectElement>(null);
+  const markerRef = useRef<SVGPathElement>(null);
+
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    const len = 2 * (w + h);
+    if (strokeRef.current) {
+      gsap.fromTo(strokeRef.current,
+        { strokeDasharray: `${len}`, strokeDashoffset: len },
+        { strokeDashoffset: 0, duration: 0.32, ease: 'power2.out' });
+    }
+    if (fillRef.current) {
+      gsap.fromTo(fillRef.current, { opacity: 0 }, { opacity: 1, duration: 0.3 });
+    }
+    let bob: gsap.core.Tween | undefined;
+    if (markerRef.current) {
+      bob = gsap.to(markerRef.current, {
+        y: markerDir > 0 ? 4 : -4,
+        duration: 0.5,
+        yoyo: true,
+        repeat: -1,
+        ease: 'sine.inOut',
+      });
+    }
+    return () => { bob?.kill(); };
+  }, [w, h, markerDir]);
+
+  return (
+    <g>
+      <rect ref={fillRef} x={x} y={y} width={w} height={h} fill="rgba(76, 175, 80, 0.18)" rx={8} />
+      <rect ref={strokeRef} x={x} y={y} width={w} height={h} fill="none" stroke="rgba(76, 175, 80, 0.65)" strokeWidth={4} rx={8} />
+      <path ref={markerRef} d={markerPath} fill="#1b5e20" stroke="#fff" strokeWidth={1.5} />
     </g>
   );
 };
@@ -121,6 +229,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
 
   /* ─── Vliegende stenen bij zetten en hits ─── */
   const [flights, setFlights] = useState<Flight[]>([]);
+  const [impacts, setImpacts] = useState<{ id: string; x: number; y: number }[]>([]);
   const flightSeqRef = useRef(0);
 
   useEffect(() => {
@@ -161,13 +270,33 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
         player: opp,
         fx: to.x, fy: to.y, tx: oppBar.x, ty: oppBar.y,
       });
+      // Impact-burst op het contactpunt
+      const impact = { id: `${ev.seq}-i`, x: to.x, y: to.y };
+      setImpacts((arr) => [...arr, impact]);
+      setTimeout(() => setImpacts((arr) => arr.filter((i) => i.id !== impact.id)), 550);
     }
 
     setFlights((f) => [...f, ...newFlights]);
     const ids = new Set(newFlights.map((f) => f.id));
-    const t = setTimeout(() => setFlights((f) => f.filter((x) => !ids.has(x.id))), 380);
+    const t = setTimeout(() => setFlights((f) => f.filter((x) => !ids.has(x.id))), 620);
     return () => clearTimeout(t);
   }, [flightEvent]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ─── Selectie-feedback: pop bij selectie, hoofdschudden zonder zetten ─── */
+  const prevSelectedRef = useRef<number | null>(null);
+  useEffect(() => {
+    const sel = state.selected;
+    const prev = prevSelectedRef.current;
+    prevSelectedRef.current = sel;
+    if (sel == null || sel === prev || prefersReducedMotion()) return;
+    const el = containerRef.current?.querySelector(`[data-stack-top="${sel}"]`);
+    if (!el) return;
+    if (state.validTos.length === 0) {
+      gsap.fromTo(el, { x: 0 }, { keyframes: [{ x: -4 }, { x: 4 }, { x: -3 }, { x: 2 }, { x: 0 }], duration: 0.35, ease: 'power1.inOut' });
+    } else {
+      gsap.fromTo(el, { scale: 0.88, transformOrigin: '50% 50%' }, { scale: 1, duration: 0.4, ease: 'back.out(3)' });
+    }
+  }, [state.selected, state.validTos]);
 
   /** Convert pointer-up to image-pixel coordinates and dispatch */
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -306,24 +435,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
           const markerY = pt.isTop ? TOP_TIP + 14 : BOTTOM_TIP - 14;
           const markerDir = pt.isTop ? -8 : 8;
           return (
-            <g key={`hl-${ptId}`}>
-              <rect
-                x={pt.x - halfW}
-                y={rectY}
-                width={halfW * 2}
-                height={triH}
-                fill="rgba(76, 175, 80, 0.18)"
-                stroke="rgba(76, 175, 80, 0.5)"
-                strokeWidth={4}
-                rx={8}
-              />
-              <path
-                d={`M ${pt.x - 8} ${markerY} h 16 l -8 ${markerDir} z`}
-                fill="#1b5e20"
-                stroke="#fff"
-                strokeWidth={1.5}
-              />
-            </g>
+            <TargetHighlight
+              key={`hl-${ptId}-${state.selected ?? 'x'}`}
+              x={pt.x - halfW}
+              y={rectY}
+              w={halfW * 2}
+              h={triH}
+              markerPath={`M ${pt.x - 8} ${markerY} h 16 l -8 ${markerDir} z`}
+              markerDir={markerDir}
+            />
           );
         })}
 
@@ -376,8 +496,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
             const cy = getPieceY(pt.isTop, i, pointState.count);
             const isBlack = pointState.owner === 'B';
 
+            const isTop = i === pointState.count - 1;
             return (
-              <React.Fragment key={`p-${pt.id}-${i}`}>
+              <g key={`p-${pt.id}-${i}`} data-stack-top={isTop ? pt.id : undefined}>
                 <circle
                   cx={pt.x + 4}
                   cy={cy + 4}
@@ -403,7 +524,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
                   strokeWidth={3}
                   className={isClimax ? 'piece-enter climax-piece' : 'piece-enter'}
                 />
-              </React.Fragment>
+              </g>
             );
           });
         })}
@@ -475,6 +596,11 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
         {/* ── Vliegende stenen (zet/hit-animatie) ── */}
         {flights.map((f) => (
           <FlightPiece key={f.id} {...f} />
+        ))}
+
+        {/* ── Impact-bursts bij geslagen stenen ── */}
+        {impacts.map((im) => (
+          <ImpactBurst key={im.id} x={im.x} y={im.y} />
         ))}
 
       </svg>

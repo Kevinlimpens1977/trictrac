@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import gsap from 'gsap';
 import type { GameState } from '../types/GameState';
 import { Pips } from './Die';
+import { prefersReducedMotion } from '../anim/motion';
 
 /**
  * Dobbelsteenweergave in het HUD-paneel (ontwerp "optie 11"):
@@ -22,7 +24,9 @@ const FACE_BASE: React.CSSProperties = {
   position: 'absolute',
   inset: 0,
   borderRadius: 6,
-  border: '1.5px solid #6d4c33',
+  borderWidth: 1.5,
+  borderStyle: 'solid',
+  borderColor: '#6d4c33',
   background: '#fbf6e8',
   display: 'flex',
   alignItems: 'center',
@@ -38,7 +42,7 @@ const MiniCube: React.FC<{
 }> = ({ value, state, onClick, label }) => {
   const isActive = state === 'active';
   const isUsed = state === 'used';
-  const border = isActive ? '1.5px solid #2e7d32' : FACE_BASE.border;
+  const borderColor = isActive ? '#2e7d32' : '#6d4c33';
   const pipColor = isActive ? '#2e7d32' : '#6d4c33';
 
   return (
@@ -46,6 +50,7 @@ const MiniCube: React.FC<{
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       aria-label={label}
+      data-cube-state={state}
       style={{
         position: 'relative',
         width: `calc(${CUBE} + 8px)`,
@@ -54,8 +59,7 @@ const MiniCube: React.FC<{
         perspective: 500,
         cursor: onClick ? 'pointer' : 'default',
         opacity: isUsed ? 0.38 : 1,
-        transition: 'opacity 0.3s ease, transform 0.3s ease',
-        transform: isActive ? 'scale(1.06)' : 'scale(1)',
+        transition: 'opacity 0.3s ease',
         userSelect: 'none',
         flex: '0 0 auto',
       }}
@@ -74,7 +78,7 @@ const MiniCube: React.FC<{
         <div
           style={{
             ...FACE_BASE,
-            border,
+            borderColor,
             borderStyle: isUsed ? 'dashed' : 'solid',
             transform: `translateZ(${HALF})`,
             background: isActive ? 'rgba(76, 175, 80, 0.12)' : FACE_BASE.background,
@@ -87,7 +91,7 @@ const MiniCube: React.FC<{
         <div
           style={{
             ...FACE_BASE,
-            border,
+            borderColor,
             borderStyle: isUsed ? 'dashed' : 'solid',
             background: '#f3ecd8',
             transform: `rotateX(90deg) translateZ(${HALF})`,
@@ -97,7 +101,7 @@ const MiniCube: React.FC<{
         <div
           style={{
             ...FACE_BASE,
-            border,
+            borderColor,
             borderStyle: isUsed ? 'dashed' : 'solid',
             background: '#e6dcc0',
             transform: `rotateY(90deg) translateZ(${HALF})`,
@@ -138,17 +142,53 @@ interface FloatingDiceProps {
 }
 
 export const FloatingDice: React.FC<FloatingDiceProps> = ({ state, onUndo, interactive = true }) => {
-  if (state.selectedSetIndex === -1 || state.diceSets.length === 0) return null;
-  if (state.isRolling) return null;
-
-  const originalSet = state.diceSets[state.selectedSetIndex];
-  if (!originalSet) return null;
-
-  const usedCount = originalSet.length - state.remainingDice.length;
+  const originalSet = state.selectedSetIndex !== -1 ? state.diceSets[state.selectedSetIndex] : undefined;
+  const visible = !!originalSet && !state.isRolling;
+  const usedCount = originalSet ? originalSet.length - state.remainingDice.length : 0;
   const canUndoAny = interactive && usedCount > 0 && state.history.length > 0;
 
+  /* ─── GSAP: consume-pop op de zojuist gespeelde kubus + dot-pop;
+     de actieve kubus 'ademt' zachtjes ───
+     Hooks staan vóór de zichtbaarheids-return (rules of hooks);
+     zonder gerenderde root doen de effecten niets. */
+  const rootRef = useRef<HTMLDivElement>(null);
+  const prevUsedRef = useRef(usedCount);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    const prev = prevUsedRef.current;
+    prevUsedRef.current = usedCount;
+    if (!root || prefersReducedMotion()) return;
+    if (usedCount > prev) {
+      const cubes = root.querySelectorAll('[data-cube-state]');
+      const justUsed = cubes[usedCount - 1];
+      if (justUsed) {
+        gsap.fromTo(justUsed, { scale: 1.25, rotation: -10 }, { scale: 1, rotation: 0, duration: 0.4, ease: 'back.out(2.5)' });
+      }
+      const dots = root.querySelectorAll('[data-dot]');
+      const dot = dots[usedCount - 1];
+      if (dot) {
+        gsap.fromTo(dot, { scale: 2.2 }, { scale: 1, duration: 0.4, ease: 'back.out(3)' });
+      }
+    }
+  }, [usedCount]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || prefersReducedMotion()) return;
+    const active = root.querySelector('[data-cube-state="active"]');
+    if (!active) return;
+    const breathe = gsap.to(active, { scale: 1.09, duration: 1.1, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    return () => {
+      breathe.kill();
+      gsap.set(active, { scale: 1 });
+    };
+  }, [visible, usedCount, originalSet?.length]);
+
+  if (!visible || !originalSet) return null;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+    <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
       <div
         className="hud-cube-row"
         style={{
@@ -187,7 +227,9 @@ export const FloatingDice: React.FC<FloatingDiceProps> = ({ state, onUndo, inter
         {originalSet.map((_, i) => (
           <span
             key={i}
+            data-dot
             style={{
+              display: 'inline-block',
               width: 6,
               height: 6,
               borderRadius: '50%',

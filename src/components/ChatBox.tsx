@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
 import { db } from '../firebase';
 import { doc, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore';
 import type { Player } from '../types/GameState';
 import { playChatPing, vibrate } from '../audio/sound';
+import { prefersReducedMotion } from '../anim/motion';
 
 /**
  * Chat voor online pvp (ontwerp "optie 1"): zwevende bubbel rechtsonder
@@ -36,6 +38,9 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ gameId, localPlayer, opponentN
   const prevCountRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const badgeRef = useRef<HTMLSpanElement>(null);
+  const animCountRef = useRef(0);
+  const prevUnreadRef = useRef(0);
 
   /* Berichten volgen op het game-document */
   useEffect(() => {
@@ -82,6 +87,19 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ gameId, localPlayer, opponentN
     if (el) el.scrollTop = el.scrollHeight;
   }, [open, messages.length]);
 
+  /* GSAP: nieuwste bubbel glijdt binnen zolang het venster open is */
+  useEffect(() => {
+    const prev = animCountRef.current;
+    animCountRef.current = messages.length;
+    if (!open || messages.length <= prev || prefersReducedMotion()) return;
+    const el = listRef.current;
+    const last = el ? el.lastElementChild : null;
+    if (!last) return;
+    gsap.fromTo(last,
+      { y: 10, opacity: 0, scale: 0.94 },
+      { y: 0, opacity: 1, scale: 1, duration: 0.28, ease: 'power3.out', clearProps: 'transform,opacity' });
+  }, [messages.length, open]);
+
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
@@ -110,6 +128,18 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ gameId, localPlayer, opponentN
   }, [draft, gameId, localPlayer]);
 
   const unread = Math.max(0, messages.length - readCount);
+
+  /* GSAP: teller-bolletje stuitert even bij elk nieuw ongelezen bericht */
+  useEffect(() => {
+    const prev = prevUnreadRef.current;
+    prevUnreadRef.current = unread;
+    if (unread <= prev || prefersReducedMotion()) return;
+    const badge = badgeRef.current;
+    if (!badge) return;
+    gsap.fromTo(badge,
+      { scale: 1.6 },
+      { scale: 1, duration: 0.45, ease: 'back.out(3.5)', clearProps: 'transform' });
+  }, [unread]);
 
   return (
     <>
@@ -168,7 +198,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ gameId, localPlayer, opponentN
       >
         {open ? '✕' : '💬'}
         {!open && unread > 0 && (
-          <span style={styles.badge}>{unread > 9 ? '9+' : unread}</span>
+          <span ref={badgeRef} style={styles.badge}>{unread > 9 ? '9+' : unread}</span>
         )}
       </button>
     </>

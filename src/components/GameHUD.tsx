@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
 import type { GameState } from '../types/GameState';
 import { FloatingDice } from './FloatingDice';
 import { isMuted, toggleMuted } from '../audio/sound';
 import { canBearOff } from '../engine/moveEngine';
+import { prefersReducedMotion } from '../anim/motion';
 import { ChatBox } from './ChatBox';
 
 interface GameHUDProps {
@@ -39,6 +41,13 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
       });
     }
   };
+  /* ─── GSAP: nudge op de gooi-knop, timer-hartslag, bar-teller-bounce ─── */
+  const rollBtnRef = useRef<HTMLButtonElement>(null);
+  const timerBadgeRef = useRef<HTMLSpanElement>(null);
+  const barBRef = useRef<HTMLSpanElement>(null);
+  const barWRef = useRef<HTMLSpanElement>(null);
+  const prevBarRef = useRef({ b: 0, w: 0 });
+
   const isBlack = state.turn === 'B';
   const colorName = isBlack ? 'Zwart' : 'Wit';
   const actualPlayerName = state.playerNames ? state.playerNames[state.turn] : colorName;
@@ -60,6 +69,55 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
     : ((localPlayer as 'B' | 'W' | undefined) ?? state.turn);
   const showAutoBearOff = !!onToggleAutoBearOff && canBearOff(state, bearOffPerspective);
 
+  const needsRollNow = !state.rawDice && !state.isRolling;
+  const myTurnToRoll = needsRollNow
+    && !(state.mode === 'pva' && state.turn === 'W')
+    && !(state.mode === 'pvp' && localPlayer && localPlayer !== state.turn);
+
+  /* Nudge: na 6s niets doen wiebelt de gooi-knop vriendelijk (herhalend) */
+  useEffect(() => {
+    if (!myTurnToRoll || prefersReducedMotion()) return;
+    let tl: gsap.core.Timeline | undefined;
+    const timer = setTimeout(() => {
+      const el = rollBtnRef.current;
+      if (!el) return;
+      tl = gsap.timeline({ repeat: -1, repeatDelay: 2.6 });
+      tl.to(el, { rotation: -2.5, scale: 1.04, duration: 0.09 })
+        .to(el, { rotation: 2.5, duration: 0.12 })
+        .to(el, { rotation: -1.5, duration: 0.1 })
+        .to(el, { rotation: 0, scale: 1, duration: 0.12, ease: 'power2.out' });
+    }, 6000);
+    return () => {
+      clearTimeout(timer);
+      tl?.kill();
+      if (rollBtnRef.current) gsap.set(rollBtnRef.current, { rotation: 0, scale: 1 });
+    };
+  }, [myTurnToRoll]);
+
+  /* Timer-hartslag: elke seconde onder de 10 een puls, feller richting 0 */
+  useEffect(() => {
+    if (turnRemaining == null || turnRemaining > 10 || turnRemaining <= 0) return;
+    if (prefersReducedMotion()) return;
+    const el = timerBadgeRef.current;
+    if (!el) return;
+    gsap.fromTo(el,
+      { scale: 1 + (11 - turnRemaining) * 0.035 },
+      { scale: 1, duration: 0.45, ease: 'power2.out' });
+  }, [turnRemaining]);
+
+  /* Bar-teller bounce zodra er een steen bij komt */
+  useEffect(() => {
+    const prev = prevBarRef.current;
+    prevBarRef.current = { b: state.barB, w: state.barW };
+    if (prefersReducedMotion()) return;
+    if (state.barB > prev.b && barBRef.current) {
+      gsap.fromTo(barBRef.current, { scale: 1.6 }, { scale: 1, duration: 0.45, ease: 'back.out(2.5)' });
+    }
+    if (state.barW > prev.w && barWRef.current) {
+      gsap.fromTo(barWRef.current, { scale: 1.6 }, { scale: 1, duration: 0.45, ease: 'back.out(2.5)' });
+    }
+  }, [state.barB, state.barW]);
+
   return (
     <div 
       style={styles.container} 
@@ -76,8 +134,10 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
           <span className="hud-turn-label" style={styles.turnLabel}>{turnLabelText}</span>
           {turnRemaining != null && turnRemaining <= 20 && (
             <span
+              ref={timerBadgeRef}
               style={{
                 ...styles.timerBadge,
+                display: 'inline-block',
                 background: turnRemaining <= 10 ? '#c62828' : '#ef6c00',
               }}
               role="timer"
@@ -122,6 +182,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
       <div style={styles.diceArea}>
         {needsRoll && !isAITurn && !isWaitingForRemote && (
           <button
+            ref={rollBtnRef}
             onClick={onRollDice}
             style={styles.rollButton}
             onMouseEnter={(e) => {
@@ -152,8 +213,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
       {/* Bar info */}
       {(state.barB > 0 || state.barW > 0) && (
         <div style={styles.barInfo}>
-          {state.barB > 0 && <span>Bar ⬛: {state.barB}</span>}
-          {state.barW > 0 && <span>Bar ⬜: {state.barW}</span>}
+          {state.barB > 0 && <span ref={barBRef} style={{ display: 'inline-block' }}>Bar ⬛: {state.barB}</span>}
+          {state.barW > 0 && <span ref={barWRef} style={{ display: 'inline-block' }}>Bar ⬜: {state.barW}</span>}
         </div>
       )}
 

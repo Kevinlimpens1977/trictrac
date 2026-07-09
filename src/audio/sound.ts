@@ -143,6 +143,18 @@ export function playVictory() {
   } catch { /* audio niet kritiek */ }
 }
 
+/** Zacht dubbeltoontje: jouw beurt is begonnen */
+export function playYourTurn() {
+  if (muted) return;
+  const c = ensureCtx();
+  if (!c) return;
+  try {
+    const now = c.currentTime;
+    tone(c, now, 659.25, 0.14, 0.05);        // E5
+    tone(c, now + 0.11, 783.99, 0.22, 0.06); // G5
+  } catch { /* audio niet kritiek */ }
+}
+
 /** Zacht twee-tonig pingetje: chatbericht ontvangen */
 export function playChatPing() {
   if (muted) return;
