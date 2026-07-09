@@ -208,7 +208,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, stats, o
         <p className="go-sub" style={styles.subtitle}>{subtitle}</p>
 
         {stats && (
-          <div style={styles.statsContainer}>
+          <div className="go-stats" style={styles.statsContainer}>
             <div className="go-stat" style={styles.statBox}>
               Gooide <span ref={doublesRef}>0</span>x dubbel
             </div>
