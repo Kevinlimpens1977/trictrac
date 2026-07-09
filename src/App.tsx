@@ -439,9 +439,11 @@ function App() {
         return;
       }
 
-      // Handmatig uitspelen: tweede tik op het geselecteerde punt speelt de steen uit
-      if (s.selected === point && s.validTos.includes(25)) {
-        dispatch({ type: 'MOVE_PIECE', from: point, to: 25 });
+      // Tweede tik/dubbelklik op de geselecteerde steen = zet direct uitvoeren
+      // (sneller dan naar het groene bestemmingsvak reiken; bij het
+      // uitspelen is validTos [25] en is dit de handmatige bear-off)
+      if (s.selected === point && s.validTos.length === 1) {
+        dispatch({ type: 'MOVE_PIECE', from: point, to: s.validTos[0] });
         return;
       }
 
