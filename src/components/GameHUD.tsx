@@ -1,7 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
 import type { GameState } from '../types/GameState';
 import { FloatingDice } from './FloatingDice';
-import { DiceRoller } from './DiceRoller';
+import { isMuted, toggleMuted } from '../audio/sound';
+import { canBearOff } from '../engine/moveEngine';
+import { prefersReducedMotion } from '../anim/motion';
+import { ChatBox } from './ChatBox';
 
 interface GameHUDProps {
   state: GameState;
@@ -10,9 +14,40 @@ interface GameHUDProps {
   onLeaveGame: () => void;
   localPlayer?: string;
   turn?: string;
+  autoBearOff?: boolean;
+  onToggleAutoBearOff?: () => void;
+  /** Resterende beurtseconden (alleen online pvp), null = geen timer */
+  turnRemaining?: number | null;
 }
 
-export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onLeaveGame, localPlayer }) => {
+export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onLeaveGame, localPlayer, autoBearOff = true, onToggleAutoBearOff, turnRemaining }) => {
+  const [muted, setMuted] = useState(isMuted());
+
+  /* Fullscreen-toggle (verborgen waar de browser het niet ondersteunt,
+     zoals Safari op iPhone — daar dekt de PWA-installatie dit af) */
+  const fullscreenSupported = typeof document !== 'undefined' && !!document.fullscreenEnabled;
+  const [isFullscreen, setIsFullscreen] = useState(() => !!document.fullscreenElement);
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => { /* al gesloten */ });
+    } else {
+      document.documentElement.requestFullscreen?.().catch((e) => {
+        console.warn('[Fullscreen] geweigerd door browser:', e?.message);
+      });
+    }
+  };
+  /* ─── GSAP: nudge op de gooi-knop, timer-hartslag, bar-teller-bounce ─── */
+  const rollBtnRef = useRef<HTMLButtonElement>(null);
+  const timerBadgeRef = useRef<HTMLSpanElement>(null);
+  const barBRef = useRef<HTMLSpanElement>(null);
+  const barWRef = useRef<HTMLSpanElement>(null);
+  const prevBarRef = useRef({ b: 0, w: 0 });
+
   const isBlack = state.turn === 'B';
   const colorName = isBlack ? 'Zwart' : 'Wit';
   const actualPlayerName = state.playerNames ? state.playerNames[state.turn] : colorName;
@@ -24,6 +59,64 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
   const needsRoll = !state.rawDice;
   const isAITurn = state.mode === 'pva' && state.turn === 'W';
   const isWaitingForRemote = state.mode === 'pvp' && localPlayer && localPlayer !== state.turn;
+  const isErrorMsg = /moet eerst|geen geldige|geen zetten|verloren|overgeslagen|geblokkeerd|vol\./i.test(state.msg);
+
+  // 'Automatisch uitspelen' is alleen relevant zodra deze speler alle stenen
+  // in het thuisvak heeft: pva = de mens (zwart), online = eigen kleur,
+  // lokaal gedeeld scherm = wie aan de beurt is.
+  const bearOffPerspective = state.mode === 'pva'
+    ? 'B' as const
+    : ((localPlayer as 'B' | 'W' | undefined) ?? state.turn);
+  const showAutoBearOff = !!onToggleAutoBearOff && canBearOff(state, bearOffPerspective);
+
+  const needsRollNow = !state.rawDice && !state.isRolling;
+  const myTurnToRoll = needsRollNow
+    && !(state.mode === 'pva' && state.turn === 'W')
+    && !(state.mode === 'pvp' && localPlayer && localPlayer !== state.turn);
+
+  /* Nudge: na 6s niets doen wiebelt de gooi-knop vriendelijk (herhalend) */
+  useEffect(() => {
+    if (!myTurnToRoll || prefersReducedMotion()) return;
+    let tl: gsap.core.Timeline | undefined;
+    const timer = setTimeout(() => {
+      const el = rollBtnRef.current;
+      if (!el) return;
+      tl = gsap.timeline({ repeat: -1, repeatDelay: 2.6 });
+      tl.to(el, { rotation: -2.5, scale: 1.04, duration: 0.09 })
+        .to(el, { rotation: 2.5, duration: 0.12 })
+        .to(el, { rotation: -1.5, duration: 0.1 })
+        .to(el, { rotation: 0, scale: 1, duration: 0.12, ease: 'power2.out' });
+    }, 6000);
+    return () => {
+      clearTimeout(timer);
+      tl?.kill();
+      if (rollBtnRef.current) gsap.set(rollBtnRef.current, { rotation: 0, scale: 1 });
+    };
+  }, [myTurnToRoll]);
+
+  /* Timer-hartslag: elke seconde onder de 10 een puls, feller richting 0 */
+  useEffect(() => {
+    if (turnRemaining == null || turnRemaining > 10 || turnRemaining <= 0) return;
+    if (prefersReducedMotion()) return;
+    const el = timerBadgeRef.current;
+    if (!el) return;
+    gsap.fromTo(el,
+      { scale: 1 + (11 - turnRemaining) * 0.035 },
+      { scale: 1, duration: 0.45, ease: 'power2.out' });
+  }, [turnRemaining]);
+
+  /* Bar-teller bounce zodra er een steen bij komt */
+  useEffect(() => {
+    const prev = prevBarRef.current;
+    prevBarRef.current = { b: state.barB, w: state.barW };
+    if (prefersReducedMotion()) return;
+    if (state.barB > prev.b && barBRef.current) {
+      gsap.fromTo(barBRef.current, { scale: 1.6 }, { scale: 1, duration: 0.45, ease: 'back.out(2.5)' });
+    }
+    if (state.barW > prev.w && barWRef.current) {
+      gsap.fromTo(barWRef.current, { scale: 1.6 }, { scale: 1, duration: 0.45, ease: 'back.out(2.5)' });
+    }
+  }, [state.barB, state.barW]);
 
   return (
     <div 
@@ -38,14 +131,58 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
             background: turnColor, border: `3px solid ${turnBorder}`,
             boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
           }} />
-          <span style={styles.turnLabel}>{turnLabelText}</span>
+          <span className="hud-turn-label" style={styles.turnLabel}>{turnLabelText}</span>
+          {turnRemaining != null && turnRemaining <= 20 && (
+            <span
+              ref={timerBadgeRef}
+              style={{
+                ...styles.timerBadge,
+                display: 'inline-block',
+                background: turnRemaining <= 10 ? '#c62828' : '#ef6c00',
+              }}
+              role="timer"
+              aria-label={`Nog ${turnRemaining} seconden`}
+            >
+              {turnRemaining > 0 ? `${turnRemaining}s` : '…'}
+            </span>
+          )}
         </div>
+        <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
+          {fullscreenSupported && (
+            <button
+              onClick={toggleFullscreen}
+              style={styles.muteButton}
+              aria-label={isFullscreen ? 'Volledig scherm sluiten' : 'Volledig scherm'}
+              title={isFullscreen ? 'Volledig scherm sluiten' : 'Volledig scherm'}
+            >
+              {isFullscreen ? '🗗' : '⛶'}
+            </button>
+          )}
+          <button
+            onClick={() => setMuted(toggleMuted())}
+            style={styles.muteButton}
+            aria-label={muted ? 'Geluid aanzetten' : 'Geluid uitzetten'}
+          >
+            {muted ? '🔇' : '🔊'}
+          </button>
+        </div>
+      </div>
+
+      {/* Feedback uit de engine (state.msg) */}
+      <div
+        key={state.msg}
+        className={`hud-msg${isErrorMsg ? ' hud-msg--error' : ''}`}
+        style={styles.message}
+        aria-live="polite"
+      >
+        {state.msg}
       </div>
 
       {/* Dice area */}
       <div style={styles.diceArea}>
         {needsRoll && !isAITurn && !isWaitingForRemote && (
           <button
+            ref={rollBtnRef}
             onClick={onRollDice}
             style={styles.rollButton}
             onMouseEnter={(e) => {
@@ -62,42 +199,63 @@ export const GameHUD: React.FC<GameHUDProps> = ({ state, onRollDice, onUndo, onL
         )}
         
         {needsRoll && isWaitingForRemote && (
-          <div style={{ color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', fontSize: '14px', margin: '10px 0' }}>
+          <div style={{ color: '#6d4c33', fontStyle: 'italic', fontSize: '14px', margin: '10px 0' }}>
             Wachten op {actualPlayerName}...
           </div>
         )}
         
-        {/* Playable dice and Roll animation */}
-        <div style={styles.diceContainer}>
-          <FloatingDice state={state} onUndo={onUndo} />
-          <DiceRoller isRolling={state.isRolling} dice={state.rawDice} />
+        {/* Speelbare dobbeltokens (worp-animatie staat op het bord) */}
+        <div className="hud-dice-container" style={styles.diceContainer}>
+          <FloatingDice state={state} onUndo={onUndo} interactive={!isWaitingForRemote} />
         </div>
       </div>
 
       {/* Bar info */}
       {(state.barB > 0 || state.barW > 0) && (
         <div style={styles.barInfo}>
-          {state.barB > 0 && <span>Bar ⬛: {state.barB}</span>}
-          {state.barW > 0 && <span>Bar ⬜: {state.barW}</span>}
+          {state.barB > 0 && <span ref={barBRef} style={{ display: 'inline-block' }}>Bar ⬛: {state.barB}</span>}
+          {state.barW > 0 && <span ref={barWRef} style={{ display: 'inline-block' }}>Bar ⬜: {state.barW}</span>}
         </div>
       )}
 
-      {/* Leave Game Button */}
-      <div style={styles.leaveContainer}>
+      {/* Onderste blok: instelling (alleen in de eindfase) + verlaat-knop */}
+      <div style={styles.bottomBlock}>
+        {showAutoBearOff && (
+          <label className="hud-auto-row" style={styles.autoRow}>
+            <input
+              type="checkbox"
+              checked={autoBearOff}
+              onChange={onToggleAutoBearOff}
+              style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#8d6e63' }}
+            />
+            Automatisch uitspelen
+          </label>
+        )}
+
+        {/* Verlaat-knop + (online) chatknop */}
+        <div className="hud-leave" style={styles.leaveContainer}>
         <button
           onClick={onLeaveGame}
           style={styles.leaveButton}
           onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(220,53,69,0.4)';
+            e.currentTarget.style.filter = 'brightness(1.08)';
+            e.currentTarget.style.transform = 'translateY(-1px)';
           }}
           onMouseLeave={(e) => {
+            e.currentTarget.style.filter = 'none';
             e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
           }}
         >
-          Verlaat Spel
+          ⏻ Verlaat spel
         </button>
+        {state.mode === 'pvp' && state.gameId && localPlayer && (
+          <ChatBox
+            gameId={state.gameId}
+            localPlayer={localPlayer as 'B' | 'W'}
+            opponentName={state.playerNames[(localPlayer === 'B' ? 'W' : 'B') as 'B' | 'W']}
+          />
+        )}
+        </div>
       </div>
     </div>
   );
@@ -109,7 +267,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: '16px',
+    gap: '10px',
     padding: '8px 12px',
     background: 'transparent',
     borderRadius: '16px',
@@ -154,12 +312,17 @@ const styles: Record<string, React.CSSProperties> = {
   },
   message: {
     fontSize: '13px',
-    color: 'rgba(255,255,255,0.7)',
+    fontWeight: 600,
+    color: '#5d4433',
     textAlign: 'center' as const,
-    lineHeight: '1.4',
-    minHeight: '36px',
+    lineHeight: '1.35',
+    minHeight: '32px',
+    maxHeight: '32px',
+    overflow: 'hidden',
+    width: '100%',
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   diceArea: {
     display: 'flex',
@@ -173,11 +336,12 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: '60px',
+    minHeight: '48px',
     width: '100%',
   },
   rollButton: {
-    padding: '12px 28px',
+    minHeight: '44px',
+    padding: '10px 28px',
     fontSize: '15px',
     fontWeight: 600,
     color: '#1a1a2e',
@@ -218,27 +382,70 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '3px',
     transition: 'width 0.3s ease',
   },
-  leaveContainer: {
+  timerBadge: {
+    minWidth: '34px',
+    padding: '3px 8px',
+    borderRadius: '999px',
+    color: '#fff',
+    fontWeight: 800,
+    fontSize: '13px',
+    textAlign: 'center',
+  },
+  muteButton: {
+    width: '44px',
+    height: '44px',
+    border: 'none',
+    borderRadius: '10px',
+    background: 'rgba(120, 80, 40, 0.1)',
+    fontSize: '18px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: '0 0 auto',
+  },
+  bottomBlock: {
     marginTop: 'auto',
     width: '100%',
     display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  autoRow: {
+    minHeight: '44px',
+    display: 'flex',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: '16px',
-    borderTop: '1px solid rgba(255,255,255,0.06)'
+    gap: '8px',
+    fontSize: '12px',
+    fontWeight: 700,
+    color: '#5d4433',
+    cursor: 'pointer',
+    userSelect: 'none',
+  },
+  leaveContainer: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    paddingTop: '8px',
+    borderTop: '1px solid rgba(120, 80, 40, 0.18)'
   },
   leaveButton: {
-    minHeight: '36px',
-    padding: '8px 16px',
-    fontSize: '12px',
-    fontWeight: 600,
+    minHeight: '44px',
+    minWidth: '44px',
+    padding: '8px 24px',
+    fontSize: '13px',
+    fontWeight: 800,
     color: '#fff',
-    background: 'linear-gradient(135deg, #dc3545, #a71d2a)',
-    border: '1px solid #7a151f',
-    borderRadius: '6px',
+    background: 'linear-gradient(180deg, #ff6b6b 0%, #c92a2a 100%)',
+    border: '1.5px solid #861616',
+    borderRadius: '999px',
     cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-    textTransform: 'uppercase',
+    boxShadow: '0 2px 0 #861616, 0 3px 6px rgba(0,0,0,0.18)',
+    textShadow: '0 1px 1px rgba(0,0,0,0.35)',
+    transition: 'filter 0.15s ease, transform 0.15s ease',
     letterSpacing: 0
   }
 };

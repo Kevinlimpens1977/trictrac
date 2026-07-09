@@ -1,25 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import gsap from 'gsap';
 import { db } from '../firebase';
-import { doc, setDoc, getDoc, onSnapshot, updateDoc, collection, query, where } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot, updateDoc, collection, query, where, limit } from 'firebase/firestore';
 import type { GameMode, Player } from '../types/GameState';
+import type { PlayerStats } from '../stats';
+import { Die } from './Die';
+import { prefersReducedMotion } from '../anim/motion';
 
 interface GameroomProps {
   onBack: () => void;
   onStartMatch: (mode: GameMode, playerNames?: { B: string, W: string }, gameId?: string, starter?: Player, localPlayer?: Player) => void;
+  /** Start direct een potje tegen de computer */
+  onStartComputer?: () => void;
+  /** Uitloggen (toont de uitlogknop rechtsboven) */
+  onLogout?: () => void;
+  /** Carrière-statistieken voor de chip onderin */
+  career?: PlayerStats | null;
+  /** Vooringevuld game-id vanuit een ?join=XXXXX deel-link */
+  initialJoinId?: string;
 }
 
 type RoomState = 'lobby' | 'toss';
 type LobbyMode = 'menu' | 'local' | 'online';
 
-export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
+/** "zojuist" / "3 min geleden" voor de lobby-lijst */
+function waitingLabel(createdAt?: number): string {
+  if (!createdAt) return 'wachtend';
+  const mins = Math.max(0, Math.round((Date.now() - createdAt) / 60000));
+  return mins === 0 ? 'zojuist' : `${mins} min geleden`;
+}
+
+export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch, onStartComputer, onLogout, career, initialJoinId }) => {
   const [roomState, setRoomState] = useState<RoomState>('lobby');
-  const [lobbyMode, setLobbyMode] = useState<LobbyMode>('menu');
+  const [lobbyMode, setLobbyMode] = useState<LobbyMode>(initialJoinId ? 'online' : 'menu');
   
   const [p1Name, setP1Name] = useState('Speler 1');
   const [p2Name, setP2Name] = useState('Speler 2');
   
   const [gameId, setGameId] = useState('');
-  const [joinId, setJoinId] = useState('');
+  const [joinId, setJoinId] = useState(initialJoinId ? initialJoinId.toUpperCase() : '');
   const [isHost, setIsHost] = useState(true);
   const [isWaiting, setIsWaiting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -35,6 +54,47 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
   const [isOnlineMode, setIsOnlineMode] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
+  /* --- GSAP: paneel-overgangen in de lobby (menu <-> lokaal <-> online) --- */
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay || prefersReducedMotion()) return;
+    const panel = overlay.firstElementChild;
+    if (!panel) return;
+    const tween = gsap.fromTo(panel,
+      { x: 26, opacity: 0 },
+      { x: 0, opacity: 1, duration: 0.32, ease: 'power3.out', clearProps: 'transform,opacity' });
+    return () => { tween.kill(); };
+  }, [lobbyMode, roomState]);
+
+  /* --- GSAP: toss-onthulling: winnaarsteen groeit met gloed, verliezer dimt --- */
+  const tossAreaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const area = tossAreaRef.current;
+    if (!area || !tossWinner || prefersReducedMotion()) return;
+    const winEl = area.querySelector('[data-toss="' + tossWinner + '"]');
+    const loseEl = area.querySelector('[data-toss="' + (tossWinner === 'B' ? 'W' : 'B') + '"]');
+    const label = area.querySelector('[data-toss-winner]');
+    const tweens: gsap.core.Tween[] = [];
+    if (winEl) {
+      tweens.push(gsap.fromTo(winEl,
+        { scale: 1 },
+        { scale: 1.22, duration: 0.45, ease: 'back.out(2.4)' }));
+      tweens.push(gsap.fromTo(winEl,
+        { filter: 'drop-shadow(0 0 0 rgba(255,215,0,0))' },
+        { filter: 'drop-shadow(0 0 14px rgba(255,215,0,0.85))', duration: 0.45, ease: 'power2.out' }));
+    }
+    if (loseEl) {
+      tweens.push(gsap.to(loseEl, { opacity: 0.45, scale: 0.92, duration: 0.4, ease: 'power2.out' }));
+    }
+    if (label) {
+      tweens.push(gsap.fromTo(label,
+        { scale: 0.6, opacity: 0, y: 8 },
+        { scale: 1, opacity: 1, y: 0, duration: 0.5, ease: 'back.out(2.2)', delay: 0.15 }));
+    }
+    return () => { tweens.forEach((t) => t.kill()); };
+  }, [tossWinner]);
+
   // Generate a random 5-character ID for hosting
   useEffect(() => {
     if (roomState === 'lobby' && !gameId) {
@@ -43,24 +103,29 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
     }
   }, [roomState, gameId]);
 
-  // Listen for open public games
+  // Listen for open public games — gefilterd, gesorteerd en begrensd zodat
+  // verlaten games de lobby niet vervuilen en de lijst klein blijft.
   useEffect(() => {
-    if (roomState === 'lobby') {
-      const q = query(
-        collection(db, 'games'), 
-        where('status', '==', 'waiting')
-      );
-      const unsub = onSnapshot(q, (snapshot) => {
-        const gamesList = snapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
-          .filter((game: any) => !game.isPrivate);
-        setOpenGames(gamesList);
-      });
-      return () => unsub();
-    }
+    if (roomState !== 'lobby') return;
+
+    const cutoff = Date.now() - 30 * 60 * 1000; // max 30 min oud
+    const mapDocs = (snapshot: { docs: { id: string; data: () => Record<string, unknown> }[] }) =>
+      snapshot.docs
+        .map((d) => ({ id: d.id, ...d.data() } as any))
+        .filter((g: any) => !g.isPrivate && (g.createdAt ?? 0) > cutoff)
+        .sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+        .slice(0, 20);
+
+    // Bewust een simpele query zonder composite-index-vereiste (die index
+    // bestond niet, en een falende query = lege lobby). Filteren, sorteren
+    // en limiteren gebeurt client-side over maximaal 50 documenten.
+    const unsub = onSnapshot(
+      query(collection(db, 'games'), where('status', '==', 'waiting'), limit(50)),
+      (snap) => setOpenGames(mapDocs(snap)),
+      (e) => console.error('[Lobby] Query faalde:', e)
+    );
+
+    return () => unsub();
   }, [roomState]);
 
   // Firebase listener for host waiting for guest
@@ -78,6 +143,11 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
             setP2Name(data.player2 || 'Gast Speler');
             setIsWaiting(false);
             setRoomState('toss');
+          } else if (data && data.status === 'cancelled') {
+            // Extern geannuleerd: niet eeuwig blijven wachten
+            setIsWaiting(false);
+            setErrorMsg('Het spel is geannuleerd. Host opnieuw om verder te gaan.');
+            setGameId('');
           }
         } else {
           console.log('[Host] Document does not exist (anymore?)');
@@ -281,6 +351,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
         }
         .gameRoomScreen {
           --room-frame-gap: clamp(10px, 1.6vw, 18px);
+          height: 100dvh;
           --room-frame-radius: clamp(20px, 2.4vw, 34px);
           position: relative;
           isolation: isolate;
@@ -308,8 +379,8 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           z-index: 1;
           inset: var(--room-frame-gap);
           margin: auto;
-          width: min(calc(100vw - (var(--room-frame-gap) * 2)), calc((100vh - (var(--room-frame-gap) * 2)) * 1.777778)) !important;
-          height: min(calc(100vh - (var(--room-frame-gap) * 2)), calc((100vw - (var(--room-frame-gap) * 2)) * 0.5625)) !important;
+          width: min(calc(100vw - (var(--room-frame-gap) * 2)), calc((100dvh - (var(--room-frame-gap) * 2)) * 1.777778)) !important;
+          height: min(calc(100dvh - (var(--room-frame-gap) * 2)), calc((100vw - (var(--room-frame-gap) * 2)) * 0.5625)) !important;
           max-width: none !important;
           max-height: none !important;
           min-width: 0 !important;
@@ -353,7 +424,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           border-radius: 12px;
           background: rgba(255, 255, 255, 0.92);
           color: #2d1b16;
-          font-family: "Impact", sans-serif;
+          font-family: var(--tt-font-display);
           font-size: clamp(18px, 3dvh, 30px);
           line-height: 1.05;
           letter-spacing: 0;
@@ -368,8 +439,51 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           font-family: sans-serif;
           font-weight: 900;
         }
+        .gameRoomChoiceComputer {
+          border-color: #e3a004;
+        }
         .gameRoomChoiceLocal {
           border-color: #12a8e8;
+        }
+        .gameRoomLogout {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          z-index: 20;
+          min-height: 44px;
+          min-width: 44px;
+          padding: 8px 18px;
+          border-radius: 999px;
+          border: 1.5px solid #861616;
+          background: linear-gradient(180deg, #ff6b6b 0%, #c92a2a 100%);
+          color: #fff;
+          font-weight: 800;
+          font-size: 13px;
+          cursor: pointer;
+          box-shadow: 0 2px 0 #861616, 0 4px 10px rgba(0, 0, 0, 0.3);
+          transition: filter 0.15s ease, transform 0.15s ease;
+        }
+        .gameRoomLogout:hover {
+          filter: brightness(1.08);
+          transform: translateY(-1px);
+        }
+        .menuStats {
+          position: absolute;
+          bottom: 3%;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 20;
+          display: flex;
+          gap: 6px;
+          padding: 6px 14px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.85);
+          border: 1px solid rgba(96, 58, 22, 0.25);
+          color: #4e342e;
+          font-weight: 700;
+          font-size: 13px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+          white-space: nowrap;
         }
         .gameRoomChoiceOnline {
           border-color: #12a8e8;
@@ -410,7 +524,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
         .gameRoomHelpDialog h2 {
           margin: 0 0 14px;
           text-align: center;
-          font-family: "Impact", sans-serif;
+          font-family: var(--tt-font-display);
           font-size: clamp(24px, 4dvh, 38px);
           text-transform: uppercase;
         }
@@ -426,8 +540,8 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           right: 12px;
           border: 0;
           border-radius: 999px;
-          width: 36px;
-          height: 36px;
+          width: 44px;
+          height: 44px;
           background: #c92a2a;
           color: #fff;
           font-weight: 900;
@@ -476,19 +590,60 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
             width: 100%;
           }
         }
+        /* Mobiel portret: de 16:9-stage is daar maar ~200px hoog en knipt
+           het formulier af (geen scroll mogelijk). Laat de stage het scherm
+           vullen zodat de overlay past en zelf kan scrollen. */
+        @media (max-width: 700px) and (orientation: portrait) {
+          /* Onder de zwevende draai-tip-banner blijven */
+          .gameRoomLogout {
+            top: 78px;
+          }
+          .gameRoomStage {
+            width: calc(100vw - (var(--room-frame-gap) * 2)) !important;
+            height: calc(100dvh - (var(--room-frame-gap) * 2)) !important;
+            aspect-ratio: auto !important;
+          }
+          .gameRoomOverlay {
+            max-height: calc(100dvh - (var(--room-frame-gap) * 2) - 16px);
+          }
+        }
         @media (max-height: 520px) and (orientation: landscape) {
           .gameRoomOverlay {
             width: min(96vw, 820px);
             max-height: calc(100dvh - 12px);
-            padding: 8px 12px;
+            padding: 6px 12px;
           }
           .gameRoomChoices {
             width: min(64%, 520px);
             gap: 8px;
           }
           .gameRoomChoiceButton {
-            min-height: 40px;
+            min-height: 44px;
             font-size: clamp(16px, 5dvh, 22px);
+          }
+          /* Compacter zodat het online-paneel met 44px-knoppen zonder
+             scrollen past op korte landscape-schermen */
+          .gameRoomColumn {
+            gap: 5px !important;
+          }
+          .gameRoomColumn h2 {
+            font-size: 16px !important;
+            margin: 0 !important;
+          }
+          .gameRoomColumn input:not([type="checkbox"]) {
+            height: 32px !important;
+            min-height: 32px !important;
+          }
+          .gameRoomColumn .gameRoomHostBox {
+            gap: 5px !important;
+            padding: 5px !important;
+          }
+          .gameRoomColumn .gameRoomDivider {
+            margin: 0 !important;
+            font-size: 11px !important;
+          }
+          .gameRoomColumn .gameRoomGameList {
+            max-height: 44px !important;
           }
         }
       `}</style>
@@ -503,7 +658,19 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           '--room-panel-height': '66%'
         } as React.CSSProperties}
       >
-        <div className="gameRoomOverlay">
+        {roomState === 'lobby' && onLogout && (
+          <button className="gameRoomLogout" onClick={onLogout} aria-label="Uitloggen">
+            ⏻ Uitloggen
+          </button>
+        )}
+        {roomState === 'lobby' && lobbyMode === 'menu' && career && career.played > 0 && (
+          <div className="menuStats" aria-label="Jouw statistieken">
+            <span>🏆 {career.won} gewonnen</span>
+            <span>·</span>
+            <span>{career.played} gespeeld</span>
+          </div>
+        )}
+        <div className="gameRoomOverlay" ref={overlayRef}>
           {roomState === 'lobby' && (
             <>
             {lobbyMode === 'menu' && (
@@ -511,6 +678,11 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                 <button className="gameRoomChoiceButton gameRoomChoiceHelp" onClick={() => setShowHelp(true)}>
                   Speluitleg
                 </button>
+                {onStartComputer && (
+                  <button className="gameRoomChoiceButton gameRoomChoiceComputer" onClick={onStartComputer}>
+                    Speel tegen de computer
+                  </button>
+                )}
                 <button className="gameRoomChoiceButton gameRoomChoiceLocal" onClick={() => setLobbyMode('local')}>
                   Speel op één computer
                 </button>
@@ -537,10 +709,10 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                   style={styles.compactInput} 
                   placeholder="Naam Speler 2 (Wit)" 
                 />
-                <button onClick={handleLocalStart} style={styles.btnSupercell}>
+                <button onClick={handleLocalStart} className="btn btn--gold btn--block">
                   Start Spel
                 </button>
-                <button onClick={handleLobbyModeBack} style={{...styles.btnSupercellRed, marginTop: '10px'}}>
+                <button onClick={handleLobbyModeBack} className="btn btn--red btn--block" style={{ marginTop: '10px' }}>
                   Terug
                 </button>
               </div>
@@ -561,12 +733,25 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                       placeholder="Jouw Naam" 
                     />
                     
-                    <div style={styles.hostBox}>
+                    <div className="gameRoomHostBox" style={styles.hostBox}>
                       <div style={styles.compactRow}>
                         <span style={styles.idLabel}>Game ID:</span>
                         <div style={styles.idDisplay}>
                           {gameId}
                           <button onClick={() => navigator.clipboard.writeText(gameId)} style={styles.copyBtn}>Copy</button>
+                          <button
+                            onClick={() => {
+                              const url = `${window.location.origin}?join=${gameId}`;
+                              if (navigator.share) {
+                                navigator.share({ title: 'Tric-Trac', text: 'Speel een potje Tric-Trac met mij!', url }).catch(() => {});
+                              } else {
+                                navigator.clipboard.writeText(url);
+                              }
+                            }}
+                            style={styles.copyBtn}
+                          >
+                            Deel link
+                          </button>
                         </div>
                       </div>
                       <div style={styles.compactRow}>
@@ -579,21 +764,24 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                           />
                           Privé spel
                         </label>
-                        <button onClick={handleHostGame} style={{...styles.btnSupercellBlue, width: '50%', height: '38px', fontSize: '14px'}}>
+                        <button onClick={handleHostGame} className="btn btn--blue" style={{ width: '50%', fontSize: '14px' }}>
                           Host Game
                         </button>
                       </div>
                     </div>
 
-                    <div style={styles.divider}>OF JOIN EEN SPEL</div>
+                    <div className="gameRoomDivider" style={styles.divider}>OF JOIN EEN SPEL</div>
                     
-                    <div style={styles.gameListContainer}>
+                    <div className="gameRoomGameList" style={styles.gameListContainer}>
                       {openGames.length === 0 ? (
                         <p style={styles.textSmall}>Geen open spellen momenteel...</p>
                       ) : (
                         openGames.map(game => (
                           <div key={game.id} style={styles.gameListItem}>
-                            <span style={styles.gameListName}>{game.player1 || 'Anoniem'}'s game</span>
+                            <span style={styles.gameListName}>
+                              {game.player1 || 'Anoniem'}'s game
+                              <span style={styles.gameListAge}> · {waitingLabel(game.createdAt)}</span>
+                            </span>
                             <button onClick={() => handleJoinGame(game.id)} style={styles.btnJoinSmall}>Join</button>
                           </div>
                         ))
@@ -607,12 +795,12 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                         style={{...styles.compactInput, width: '60%'}} 
                         placeholder="Privé ID" 
                       />
-                      <button onClick={() => handleJoinGame()} style={{...styles.btnSupercellBlue, width: '38%', height: '38px', fontSize: '12px'}}>
+                      <button onClick={() => handleJoinGame()} className="btn btn--blue" style={{ width: '38%', fontSize: '12px' }}>
                         Join ID
                       </button>
                     </div>
                     {errorMsg && <p style={styles.error}>{errorMsg}</p>}
-                    <button onClick={handleLobbyModeBack} style={{...styles.btnSupercellRed, marginTop: '6px'}}>
+                    <button onClick={handleLobbyModeBack} className="btn btn--red btn--block" style={{ marginTop: '6px' }}>
                       Terug
                     </button>
                   </>
@@ -622,7 +810,7 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                     <div style={styles.spinner}></div>
                     <p style={styles.text}>Wachten op tegenstander...</p>
                     <p style={styles.text}>Deel dit Game ID: <strong>{gameId}</strong></p>
-                    <button onClick={handleLobbyModeBack} style={{...styles.btnSupercellRed, marginTop: '10px'}}>
+                    <button onClick={handleLobbyModeBack} className="btn btn--red btn--block" style={{ marginTop: '10px' }}>
                       Terug
                     </button>
                   </div>
@@ -634,22 +822,26 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           )}
 
           {roomState === 'toss' && (
-            <div style={styles.tossContainer}>
+            <div style={styles.tossContainer} ref={tossAreaRef}>
               <h2 style={styles.columnTitle}>De Toss</h2>
               <p style={styles.text}>Wie gooit het hoogst en begint?</p>
               
               <div style={styles.tossDisplay}>
-                <div style={styles.playerToss}>
+                <div style={styles.playerToss} data-toss="B">
                   <p style={styles.playerName}>{p1Name} (Zwart)</p>
-                  <div className={isTossing ? "rolling" : ""} style={styles.tossDie}>
-                    {tossP1 !== null ? <DiceFace value={tossP1} color="black" /> : <span style={styles.questionMark}>?</span>}
-                  </div>
+                  {tossP1 !== null ? (
+                    <Die value={tossP1} color="black" size={60} rolling={isTossing} />
+                  ) : (
+                    <div style={styles.tossDie}><span style={styles.questionMark}>?</span></div>
+                  )}
                 </div>
-                <div style={styles.playerToss}>
+                <div style={styles.playerToss} data-toss="W">
                   <p style={styles.playerName}>{p2Name} (Wit)</p>
-                  <div className={isTossing ? "rolling" : ""} style={styles.tossDie}>
-                    {tossP2 !== null ? <DiceFace value={tossP2} color="white" /> : <span style={styles.questionMark}>?</span>}
-                  </div>
+                  {tossP2 !== null ? (
+                    <Die value={tossP2} color="white" size={60} rolling={isTossing} />
+                  ) : (
+                    <div style={styles.tossDie}><span style={styles.questionMark}>?</span></div>
+                  )}
                 </div>
               </div>
 
@@ -657,14 +849,14 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
                 isOnlineMode && !isHost ? (
                   <p style={styles.text}>Wacht op {p1Name} voor de toss...</p>
                 ) : (
-                  <button onClick={handleToss} style={styles.btnSupercell}>
+                  <button onClick={handleToss} className="btn btn--gold">
                     Gooi Dobbelstenen
                   </button>
                 )
               )}
               
               {tossWinner && (
-                <div style={styles.winnerDisplay}>
+                <div style={styles.winnerDisplay} data-toss-winner>
                   <h3>{tossWinner === 'B' ? p1Name : p2Name} Wint!</h3>
                   <p style={styles.text}>Spel start zo...</p>
                 </div>
@@ -673,8 +865,13 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           )}
         </div>
         {showHelp && (
-          <div className="gameRoomHelpDialog" role="dialog" aria-modal="true">
-            <button className="gameRoomHelpClose" onClick={() => setShowHelp(false)} aria-label="Sluit speluitleg">
+          <div
+            className="gameRoomHelpDialog"
+            role="dialog"
+            aria-modal="true"
+            onKeyDown={(e) => { if (e.key === 'Escape') setShowHelp(false); }}
+          >
+            <button className="gameRoomHelpClose" autoFocus onClick={() => setShowHelp(false)} aria-label="Sluit speluitleg">
               X
             </button>
             <h2>Speluitleg</h2>
@@ -688,43 +885,6 @@ export const Gameroom: React.FC<GameroomProps> = ({ onStartMatch }) => {
           </div>
         )}
       </div>
-    </div>
-  );
-};
-
-const DiceFace: React.FC<{value: number, color: 'white' | 'black'}> = ({value, color}) => {
-  const isBlack = color === 'black';
-  const dotColor = isBlack ? '#e0e0e0' : '#222';
-  
-  const dotPositions: Record<number, {r: number, c: number}[]> = {
-    1: [{r: 2, c: 2}],
-    2: [{r: 1, c: 1}, {r: 3, c: 3}],
-    3: [{r: 1, c: 1}, {r: 2, c: 2}, {r: 3, c: 3}],
-    4: [{r: 1, c: 1}, {r: 1, c: 3}, {r: 3, c: 1}, {r: 3, c: 3}],
-    5: [{r: 1, c: 1}, {r: 1, c: 3}, {r: 2, c: 2}, {r: 3, c: 1}, {r: 3, c: 3}],
-    6: [{r: 1, c: 1}, {r: 2, c: 1}, {r: 3, c: 1}, {r: 1, c: 3}, {r: 2, c: 3}, {r: 3, c: 3}],
-  };
-
-  const faceStyle = {
-    ...styles.diceFace,
-    backgroundColor: isBlack ? '#222' : '#fff',
-  };
-
-  return (
-    <div style={faceStyle}>
-      {dotPositions[value]?.map((pos, i) => (
-        <div 
-          key={i} 
-          style={{
-            gridRow: pos.r, 
-            gridColumn: pos.c, 
-            alignSelf: 'center',
-            justifySelf: 'center',
-            ...styles.diceDot, 
-            backgroundColor: dotColor
-          }}
-        />
-      ))}
     </div>
   );
 };
@@ -773,7 +933,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#3e2723',
     textAlign: 'center',
     margin: '0 0 4px 0',
-    fontFamily: '"Impact", sans-serif',
+    fontFamily: 'var(--tt-font-display)',
     fontSize: 'clamp(18px, 2.6dvh, 28px)',
     textTransform: 'uppercase',
     letterSpacing: 0,
@@ -822,62 +982,10 @@ const styles: Record<string, React.CSSProperties> = {
     boxSizing: 'border-box',
     width: '100%',
   },
-  btnSupercell: {
-    height: 'clamp(38px, 5.8dvh, 44px)',
-    background: 'linear-gradient(180deg, #fbbc05 0%, #e38a04 100%)',
-    border: '2px solid #b86200',
-    borderRadius: '12px',
-    color: 'white',
-    fontFamily: '"Impact", sans-serif',
-    textTransform: 'uppercase',
-    fontSize: 'clamp(13px, 2.2dvh, 18px)',
-    cursor: 'pointer',
-    boxShadow: '0 4px 0 #b86200, 0 6px 12px rgba(0,0,0,0.3)',
-    textShadow: '1px 1px 1px rgba(0,0,0,0.5)',
-    transition: 'transform 0.1s, filter 0.1s',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  btnSupercellBlue: {
-    height: 'clamp(38px, 5.8dvh, 44px)',
-    background: 'linear-gradient(180deg, #5fc3fa 0%, #1e87d6 100%)',
-    border: '2px solid #104e7d',
-    borderRadius: '12px',
-    color: 'white',
-    fontFamily: '"Impact", sans-serif',
-    textTransform: 'uppercase',
-    fontSize: 'clamp(13px, 2.2dvh, 18px)',
-    cursor: 'pointer',
-    boxShadow: '0 4px 0 #104e7d, 0 6px 12px rgba(0,0,0,0.3)',
-    textShadow: '1px 1px 1px rgba(0,0,0,0.5)',
-    transition: 'transform 0.1s, filter 0.1s',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  btnSupercellRed: {
-    height: 'clamp(38px, 5.8dvh, 44px)',
-    background: 'linear-gradient(180deg, #ff6b6b 0%, #c92a2a 100%)',
-    border: '2px solid #861616',
-    borderRadius: '12px',
-    color: 'white',
-    fontFamily: '"Impact", sans-serif',
-    textTransform: 'uppercase',
-    fontSize: 'clamp(13px, 2.2dvh, 18px)',
-    cursor: 'pointer',
-    boxShadow: '0 4px 0 #861616, 0 6px 12px rgba(0,0,0,0.3)',
-    textShadow: '1px 1px 1px rgba(0,0,0,0.5)',
-    transition: 'transform 0.1s',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
   copyBtn: {
-    padding: '4px 8px',
+    minWidth: '44px',
+    minHeight: '44px',
+    padding: '0 10px',
     background: '#8d6e63',
     color: '#fff',
     border: 'none',
@@ -930,12 +1038,20 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     fontSize: 'clamp(12px, 1.2vw, 14px)',
   },
+  gameListAge: {
+    color: '#8d6e63',
+    fontWeight: 'normal',
+    fontStyle: 'italic',
+    fontSize: '11px',
+  },
   btnJoinSmall: {
+    minHeight: '44px',
+    minWidth: '44px',
     background: 'linear-gradient(180deg, #5fc3fa 0%, #1e87d6 100%)',
     border: '1px solid #104e7d',
     borderRadius: '6px',
     color: 'white',
-    fontFamily: '"Impact", sans-serif',
+    fontFamily: 'var(--tt-font-display)',
     textTransform: 'uppercase',
     fontSize: '12px',
     padding: '4px 12px',
@@ -1005,6 +1121,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '60px',
     height: '60px',
     borderRadius: '12px',
+    background: 'linear-gradient(160deg, #6d4c33, #4e342e)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1016,22 +1133,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     color: '#fff',
     textShadow: '0 2px 4px rgba(0,0,0,0.5)'
-  },
-  diceFace: {
-    width: '100%',
-    height: '100%',
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr',
-    gridTemplateRows: '1fr 1fr 1fr',
-    padding: '8px',
-    boxSizing: 'border-box',
-    boxShadow: 'inset 0 -3px 0 rgba(0,0,0,0.2)',
-  },
-  diceDot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.3)',
   },
   winnerDisplay: {
     textAlign: 'center',

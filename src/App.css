@@ -74,12 +74,169 @@
   display: none;
 }
 
+.rotate-hint {
+  display: none;
+}
+
+/* Feedbackregel in de HUD (state.msg) */
+@keyframes hudMsgIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes hudMsgShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  50% { transform: translateX(3px); }
+  75% { transform: translateX(-2px); }
+}
+
+.hud-msg {
+  animation: hudMsgIn 0.25s ease-out;
+}
+
+.hud-msg--error {
+  color: #a3271f !important;
+  animation: hudMsgIn 0.25s ease-out, hudMsgShake 0.35s ease-in-out 0.1s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-msg, .hud-msg--error,
+  .piece-enter, .animate-piece-exit, .climax-piece,
+  .waiting-glow-white, .waiting-glow-black,
+  .rotate-hint, .board-dice {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+
+/* ─── Game-over op korte landscape-schermen (telefoon horizontaal):
+   twee kolommen zodat alles past, inclusief de kroon-dobbelsteentjes.
+   (Geen transform op .go-card zelf: GSAP-entrance/shake blijven werken.) */
+@media (max-height: 520px) and (orientation: landscape) {
+  .go-card {
+    display: grid !important;
+    grid-template-columns: 168px 1fr;
+    align-items: center !important;
+    column-gap: 18px;
+    row-gap: 6px;
+    padding: 14px 26px 16px 10px !important;
+    max-width: min(94vw, 660px) !important;
+    max-height: 94dvh;
+    text-align: left !important;
+  }
+
+  .go-card > *:not(.go-medal) {
+    grid-column: 2;
+  }
+
+  .go-medal {
+    position: static !important;
+    grid-column: 1;
+    grid-row: 1 / span 7;
+    justify-self: center;
+    align-self: center;
+    /* CSS !important wint van GSAP's inline transform: de zweef-loop
+       staat hier bewust stil, de rest van de ceremonie blijft werken */
+    transform: scale(0.72) !important;
+    margin-top: 34px;
+  }
+
+  .go-title {
+    font-size: 28px !important;
+    margin: 0 !important;
+  }
+
+  .go-sub {
+    font-size: 13px !important;
+    margin: 0 0 6px 0 !important;
+  }
+
+  .go-stats {
+    gap: 6px !important;
+    margin: 0 0 6px 0 !important;
+  }
+
+  .go-stats .go-stat {
+    padding: 8px 14px !important;
+    font-size: 14px !important;
+    border-radius: 9px !important;
+  }
+
+  .go-career {
+    font-size: 11.5px !important;
+    margin: 0 0 4px 0 !important;
+  }
+
+  .go-divider {
+    margin: 0 0 8px 0 !important;
+  }
+
+  .go-btn {
+    justify-self: start;
+    min-height: 44px !important;
+    padding: 10px 30px !important;
+    font-size: 15px !important;
+  }
+}
+
+/* ─── Chat: knipperende gloed bij ongelezen berichten ─── */
+@keyframes chatGlow {
+  0% { box-shadow: 0 3px 0 rgba(0,0,0,0.2), 0 5px 12px rgba(0,0,0,0.3), 0 0 0 0 rgba(229, 57, 53, 0.75); }
+  70% { box-shadow: 0 3px 0 rgba(0,0,0,0.2), 0 5px 12px rgba(0,0,0,0.3), 0 0 0 12px rgba(229, 57, 53, 0); }
+  100% { box-shadow: 0 3px 0 rgba(0,0,0,0.2), 0 5px 12px rgba(0,0,0,0.3), 0 0 0 0 rgba(229, 57, 53, 0); }
+}
+
+.chat-fab--alert {
+  animation: chatGlow 1.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-fab--alert {
+    animation: none;
+    box-shadow: 0 0 0 4px rgba(229, 57, 53, 0.45) !important;
+  }
+}
+
+/* ─── 3D-dobbelstenen ─── */
+@keyframes dieTumble {
+  0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
+  100% { transform: rotateX(360deg) rotateY(720deg) rotateZ(180deg); }
+}
+
+/* Worp-overlay: midden op de linker bordhelft */
+.board-dice-overlay {
+  position: absolute;
+  left: 21%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  pointer-events: none;
+}
+
+.board-dice {
+  display: flex;
+  gap: 14px;
+  opacity: 1;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.board-dice--fade {
+  opacity: 0;
+  transform: scale(0.6) translateY(12px);
+}
+
 .game-shell {
   --game-frame-gap: clamp(10px, 1.6vw, 18px);
   --game-frame-radius: clamp(20px, 2.4vw, 34px);
   position: relative !important;
   isolation: isolate;
-  padding: var(--game-frame-gap) !important;
+  padding:
+    max(var(--game-frame-gap), env(safe-area-inset-top, 0px))
+    max(var(--game-frame-gap), env(safe-area-inset-right, 0px))
+    max(var(--game-frame-gap), env(safe-area-inset-bottom, 0px))
+    max(var(--game-frame-gap), env(safe-area-inset-left, 0px)) !important;
   background:
     radial-gradient(circle at 18% 20%, rgba(255, 244, 184, 0.55), transparent 32%),
     radial-gradient(circle at 82% 16%, rgba(219, 235, 255, 0.7), transparent 34%),
@@ -100,8 +257,8 @@
 
 .board-wrapper {
   z-index: 1;
-  width: min(calc(100vw - (var(--game-frame-gap) * 2)), calc((100vh - (var(--game-frame-gap) * 2)) * 1.917485)) !important;
-  height: min(calc(100vh - (var(--game-frame-gap) * 2)), calc((100vw - (var(--game-frame-gap) * 2)) * 0.521516)) !important;
+  width: min(calc(100vw - (var(--game-frame-gap) * 2)), calc((100dvh - (var(--game-frame-gap) * 2)) * 1.917485)) !important;
+  height: min(calc(100dvh - (var(--game-frame-gap) * 2)), calc((100vw - (var(--game-frame-gap) * 2)) * 0.521516)) !important;
   overflow: hidden;
   border: 2px solid rgb(255, 255, 255);
   border-radius: var(--game-frame-radius);
@@ -117,15 +274,101 @@
   max-height: none !important;
 }
 
-@media (max-height: 520px) and (orientation: landscape) {
+/* HUD in het geschilderde SPELRESULTAAT-papier: op ruime schermen is de
+   overlay transparant en valt hij exact bínnen het geschilderde kader,
+   onder de geschilderde titel (papier: x 67-93%, y 14-80% van het bord).
+   De dobbelstenen rollen op het bord, dus dit compacte vlak volstaat. */
+.board-hud-overlay {
+  --hud-cube: 57px;
+  position: absolute;
+  left: 67.4%;
+  top: 21%;
+  width: 24.9%;
+  height: 58.5%;
+  display: flex;
+  overflow: hidden;
+  box-sizing: border-box;
+  pointer-events: auto;
+  background: transparent;
+}
+
+/* Compacte HUD op smallere schermen (tablet-portret, phone-landscape):
+   het geschilderde papier is daar te klein voor de content, dus krijgt
+   het paneel weer een eigen achtergrond en een ruimere maat. */
+@media (max-width: 1100px) {
   .board-hud-overlay {
-    top: 23% !important;
-    height: 50% !important;
+    --hud-cube: 40px;
+    left: 65.8%;
+    top: 10%;
+    width: 27%;
+    height: 82%;
+    background: linear-gradient(180deg, #f9efd7 0%, #f0e0ba 100%);
+    border: 2px solid rgba(140, 100, 55, 0.45);
+    border-radius: 12px;
+    box-shadow: inset 0 0 18px rgba(120, 80, 40, 0.16), 0 4px 10px rgba(0, 0, 0, 0.18);
   }
 
   .board-hud-overlay > div {
-    gap: 8px !important;
-    padding: 6px 10px !important;
+    gap: 6px !important;
+    padding: 4px 8px !important;
+  }
+
+  .board-hud-overlay .hud-msg {
+    min-height: 24px !important;
+    max-height: 24px !important;
+    font-size: 11px !important;
+  }
+
+  .board-hud-overlay .hud-dice-container {
+    min-height: 40px !important;
+  }
+
+  .board-hud-overlay .hud-auto-row {
+    min-height: 30px !important;
+    font-size: 11px !important;
+  }
+
+  .board-hud-overlay .hud-leave {
+    padding-top: 2px !important;
+  }
+
+  .board-hud-overlay .hud-turn-label {
+    font-size: 14px !important;
+    line-height: 1.15 !important;
+  }
+}
+
+/* Korte landscape-schermen (telefoons): NA het 1100px-blok zodat de
+   kleinere kubusmaat wint — een 8-stenen tric-trac-worp moet passen. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .board-hud-overlay {
+    --hud-cube: 30px;
+    top: 6%;
+    height: 88%;
+  }
+
+  .board-hud-overlay > div {
+    gap: 6px !important;
+    padding: 4px 8px !important;
+  }
+
+  .board-hud-overlay .hud-msg {
+    min-height: 20px !important;
+    max-height: 20px !important;
+    font-size: 10.5px !important;
+  }
+
+  .board-hud-overlay .hud-cube-row {
+    gap: 6px !important;
+  }
+
+  .board-hud-overlay .hud-dots {
+    margin-top: 8px !important;
+  }
+
+  /* Terugnemen kan via de kubussen zelf; de losse knop past hier niet */
+  .board-hud-overlay .hud-undo-btn {
+    display: none !important;
   }
 }
 
@@ -135,7 +378,11 @@
     align-items: center !important;
     justify-content: flex-start !important;
     gap: 12px;
-    padding: max(14px, env(safe-area-inset-top)) var(--game-frame-gap) var(--game-frame-gap) !important;
+    padding:
+      max(14px, env(safe-area-inset-top, 0px))
+      max(var(--game-frame-gap), env(safe-area-inset-right, 0px))
+      max(var(--game-frame-gap), env(safe-area-inset-bottom, 0px))
+      max(var(--game-frame-gap), env(safe-area-inset-left, 0px)) !important;
     overflow: hidden !important;
   }
 
@@ -159,21 +406,66 @@
   }
 
   .mobile-hud-panel {
+    --hud-cube: 48px;
     display: flex;
-    width: min(94vw, 370px);
-    max-height: calc(100dvh - 245px);
-    min-height: 184px;
+    flex: 1 1 auto;
+    width: min(94vw, 420px);
+    min-height: 160px;
     overflow: hidden;
     border: 2px solid rgba(96, 58, 22, 0.28);
     border-radius: 14px;
     background: linear-gradient(180deg, rgba(248, 226, 175, 0.94), rgba(226, 183, 105, 0.92));
     box-shadow: 0 14px 32px rgba(0, 0, 0, 0.38);
+    margin-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .mobile-hud-panel > div {
     min-height: 0;
     height: auto !important;
-    gap: 10px !important;
-    padding: 12px !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+  }
+
+  .rotate-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    width: min(94vw, 420px);
+    padding: 4px 4px 4px 14px;
+    background: rgba(255, 248, 225, 0.95);
+    border: 1px solid rgba(96, 58, 22, 0.3);
+    border-radius: 12px;
+    color: #4e342e;
+    font-weight: 700;
+    font-size: 13px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Zwevende variant voor menu/gameroom (die schermen hebben geen
+     eigen kolom-layout waar de banner in past) */
+  .rotate-hint--floating {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    top: max(10px, env(safe-area-inset-top, 0px));
+    z-index: 80;
+  }
+
+  .rotate-hint span {
+    flex: 1;
+  }
+
+  .rotate-hint-close {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 10px;
+    background: rgba(96, 58, 22, 0.12);
+    color: #4e342e;
+    font-size: 16px;
+    font-weight: 900;
+    cursor: pointer;
   }
 }

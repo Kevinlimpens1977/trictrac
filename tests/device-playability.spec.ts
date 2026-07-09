@@ -36,129 +36,57 @@ async function expectTappableInViewport(page: Page, label: string | RegExp) {
   expect(tapTargetReceivesClick, `${String(label)} should receive taps at its center`).toBe(true);
 }
 
-async function expectHitboxReceivesClickInViewport(page: Page, label: string | RegExp) {
-  const control = page.getByRole('button', { name: label });
-  await expect(control).toBeVisible();
-
-  const box = await control.boundingBox();
-  expect(box, `${String(label)} should have a layout box`).not.toBeNull();
-  const viewport = page.viewportSize();
-  expect(viewport, 'viewport should be available').not.toBeNull();
-  if (!box || !viewport) return;
-
-  expect(box.x, `${String(label)} should not overflow left`).toBeGreaterThanOrEqual(0);
-  expect(box.y, `${String(label)} should not overflow top`).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width, `${String(label)} should not overflow right`).toBeLessThanOrEqual(viewport.width);
-  expect(box.y + box.height, `${String(label)} should not overflow bottom`).toBeLessThanOrEqual(viewport.height);
-
-  const tapTargetReceivesClick = await control.evaluate((element, point) => {
-    const topElement = document.elementFromPoint(point.x, point.y);
-    return topElement === element || element.contains(topElement);
-  }, {
-    x: box.x + box.width / 2,
-    y: box.y + box.height / 2,
-  });
-  expect(tapTargetReceivesClick, `${String(label)} should receive taps at its center`).toBe(true);
-}
-
-async function expectMenuHitboxesOnPaintedButtons(page: Page) {
-  const stage = page.locator('.videoStage');
-  const pvp = page.getByRole('button', { name: 'Start speler tegen speler' });
-  const pvc = page.getByRole('button', { name: 'Start speler tegen computer' });
-
-  const [stageBox, pvpBox, pvcBox] = await Promise.all([
-    stage.boundingBox(),
-    pvp.boundingBox(),
-    pvc.boundingBox(),
-  ]);
-
-  expect(stageBox, 'menu stage should have a layout box').not.toBeNull();
-  expect(pvpBox, 'pvp hitbox should have a layout box').not.toBeNull();
-  expect(pvcBox, 'pvc hitbox should have a layout box').not.toBeNull();
-  if (!stageBox || !pvpBox || !pvcBox) return;
-
-  const asStagePercent = (box: { x: number; y: number; width: number; height: number }) => ({
-    left: (box.x - stageBox.x) / stageBox.width,
-    top: (box.y - stageBox.y) / stageBox.height,
-    right: (box.x + box.width - stageBox.x) / stageBox.width,
-    bottom: (box.y + box.height - stageBox.y) / stageBox.height,
+/**
+ * Tap-target audit: elke zichtbare knop moet minimaal 44x44 CSS-px zijn
+ * (Apple HIG / WCAG 2.5.5). Allowlist is bewust leeg.
+ */
+async function expectAllVisibleButtons44(page: Page, context: string) {
+  // offsetWidth/offsetHeight: layout-maat, onafhankelijk van transforms
+  // (entry-animaties zoals popIn schalen tijdelijk via transform).
+  const measure = () => page.evaluate(() => {
+    return Array.from(document.querySelectorAll('button'))
+      .filter((b) => {
+        const style = window.getComputedStyle(b);
+        return b.offsetWidth > 0 && b.offsetHeight > 0 && style.visibility !== 'hidden';
+      })
+      .map((b) => ({
+        label: (b.getAttribute('aria-label') || b.textContent || '?').trim().slice(0, 40),
+        width: b.offsetWidth,
+        height: b.offsetHeight,
+      }));
   });
 
-  const pvpRect = asStagePercent(pvpBox);
-  const pvcRect = asStagePercent(pvcBox);
+  // 0.5px epsilon: subpixel-rendering kan exact-44px targets als 43.99998 meten
+  const MIN = 43.5;
 
-  expect(pvpRect.left).toBeGreaterThanOrEqual(0.14);
-  expect(pvpRect.left).toBeLessThanOrEqual(0.18);
-  expect(pvpRect.right).toBeGreaterThanOrEqual(0.46);
-  expect(pvpRect.right).toBeLessThanOrEqual(0.50);
-  expect(pvcRect.left).toBeGreaterThanOrEqual(0.51);
-  expect(pvcRect.left).toBeLessThanOrEqual(0.54);
-  expect(pvcRect.right).toBeGreaterThanOrEqual(0.83);
-  expect(pvcRect.right).toBeLessThanOrEqual(0.87);
+  // Layout (dvh/clamp/fonts) kan onder parallelle testload nog even zetten;
+  // meet opnieuw voordat we definitief falen.
+  let buttons = await measure();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ok = buttons.length > 0 && buttons.every((b) => b.width >= MIN && b.height >= MIN);
+    if (ok) break;
+    await page.waitForTimeout(300);
+    buttons = await measure();
+  }
 
-  for (const [label, rect] of [['pvp', pvpRect], ['pvc', pvcRect]] as const) {
-    expect(rect.top, `${label} hitbox should start on the painted button`).toBeGreaterThanOrEqual(0.84);
-    expect(rect.top, `${label} hitbox should start on the painted button`).toBeLessThanOrEqual(0.88);
-    expect(rect.bottom, `${label} hitbox should end on the painted button`).toBeGreaterThanOrEqual(0.94);
-    expect(rect.bottom, `${label} hitbox should end on the painted button`).toBeLessThanOrEqual(0.98);
+  expect(buttons.length, `${context}: at least one visible button expected`).toBeGreaterThan(0);
+  for (const b of buttons) {
+    expect(b.width, `${context}: "${b.label}" should be >=44px wide`).toBeGreaterThanOrEqual(MIN);
+    expect(b.height, `${context}: "${b.label}" should be >=44px tall`).toBeGreaterThanOrEqual(MIN);
   }
 }
 
 for (const viewport of viewports) {
-  test(`menu video uses the login-style card background on ${viewport.name}`, async ({ page }) => {
+  test(`hub (gameroom) controls are playable after login on ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto('/?test=1', { waitUntil: 'load' });
 
-    const screenStyle = await page.locator('.startScreen').evaluate((element) => {
-      const style = window.getComputedStyle(element);
-      const backdrop = window.getComputedStyle(element, '::before');
-      return {
-        background: style.background,
-        backdropBackgroundImage: backdrop.backgroundImage,
-        backdropFilter: backdrop.filter,
-      };
-    });
-
-    expect(screenStyle.background).not.toBe('rgb(5, 5, 5) none repeat scroll 0% 0% / auto padding-box border-box');
-    expect(screenStyle.backdropBackgroundImage).toContain('trictrachome');
-    expect(screenStyle.backdropFilter).toContain('blur');
-
-    const stage = page.locator('.videoStage');
-    await expect(stage).toBeVisible();
-    const stageBox = await stage.boundingBox();
-    expect(stageBox).not.toBeNull();
-    if (!stageBox) return;
-
-    expect(stageBox.width / stageBox.height).toBeCloseTo(16 / 9, 2);
-    expect(stageBox.x).toBeGreaterThanOrEqual(8);
-    expect(stageBox.y).toBeGreaterThanOrEqual(8);
-    expect(stageBox.x + stageBox.width).toBeLessThanOrEqual(viewport.width - 8);
-    expect(stageBox.y + stageBox.height).toBeLessThanOrEqual(viewport.height - 8);
-
-    const stageStyle = await stage.evaluate((element) => {
-      const style = window.getComputedStyle(element);
-      return {
-        borderTopColor: style.borderTopColor,
-        borderTopWidth: style.borderTopWidth,
-        borderRadius: style.borderTopLeftRadius,
-        overflow: style.overflow,
-      };
-    });
-
-    expect(stageStyle.borderTopColor).toBe('rgb(255, 255, 255)');
-    expect(stageStyle.borderTopWidth).toBe('2px');
-    expect(Number.parseFloat(stageStyle.borderRadius)).toBeGreaterThanOrEqual(18);
-    expect(stageStyle.overflow).toBe('hidden');
-  });
-
-  test(`menu start controls are playable on ${viewport.name}`, async ({ page }) => {
-    await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto('/?test=1', { waitUntil: 'load' });
-
-    await expectHitboxReceivesClickInViewport(page, 'Start speler tegen speler');
-    await expectHitboxReceivesClickInViewport(page, 'Start speler tegen computer');
-    await expectMenuHitboxesOnPaintedButtons(page);
-    await expect(page.getByRole('button', { name: 'Speluitleg' })).toHaveCount(0);
+    // Na inloggen land je direct in de gameroom-hub
+    await expectTappableInViewport(page, 'Speluitleg');
+    await expectTappableInViewport(page, 'Speel tegen de computer');
+    await expectTappableInViewport(page, /Speel op (één|een) computer/);
+    await expectTappableInViewport(page, 'Speel online');
+    await expectTappableInViewport(page, 'Uitloggen');
   });
 
   test(`game controls are playable on ${viewport.name}`, async ({ page }) => {
@@ -248,5 +176,98 @@ for (const viewport of viewports) {
     expect(wrapperStyle.borderTopWidth).toBe('2px');
     expect(Number.parseFloat(wrapperStyle.borderRadius)).toBeGreaterThanOrEqual(18);
     expect(wrapperStyle.overflow).toBe('hidden');
+  });
+}
+
+/* ─── Regressie: statistieken-chip mag de menuknoppen niet verschuiven ───
+   (de chip rendert alleen bij bestaande stats; verse testprofielen hebben
+   die niet, dus we seeden localStorage vóór het laden) ─── */
+test('stats chip renders inside the gameroom stage', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('tt-stats-test-user', JSON.stringify({
+      played: 3, won: 1, lost: 2, doubles: 4, hits: 2, fastestWinMs: 300000,
+    }));
+  });
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.goto('/?test=1', { waitUntil: 'load' });
+
+  await expect(page.locator('.menuStats')).toBeVisible();
+
+  const stage = await page.locator('.gameRoomStage').boundingBox();
+  const chip = await page.locator('.menuStats').boundingBox();
+  expect(stage).not.toBeNull();
+  expect(chip).not.toBeNull();
+  if (!stage || !chip) return;
+
+  expect(chip.y + chip.height, 'chip should stay inside the stage').toBeLessThanOrEqual(stage.y + stage.height + 1);
+  expect(chip.y, 'chip should start inside the stage').toBeGreaterThanOrEqual(stage.y - 1);
+});
+
+/* ─── Tap-target audit: alle zichtbare knoppen >=44px op elk kerndevice ─── */
+
+const tapTargetViewports = [
+  { name: 'mobile portrait', width: 375, height: 812 },
+  { name: 'mobile landscape', width: 812, height: 375 },
+  { name: 'desktop', width: 1280, height: 800 },
+];
+
+for (const viewport of tapTargetViewports) {
+  test(`tap targets >=44px on hub (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/?test=1', { waitUntil: 'load' });
+    await expectAllVisibleButtons44(page, 'hub');
+  });
+
+  test(`tap targets >=44px in gameroom flows (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/?test=1&start_gameroom=1', { waitUntil: 'load' });
+
+    await expect(page.getByRole('button', { name: 'Speel op één computer' })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'gameroom lobby');
+
+    // Speluitleg-dialoog (sluitknop)
+    await page.getByRole('button', { name: 'Speluitleg' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expectAllVisibleButtons44(page, 'gameroom help');
+    await page.getByRole('button', { name: 'Sluit speluitleg' }).click();
+
+    // Lokaal spelen (invoer + start/terug)
+    await page.getByRole('button', { name: 'Speel op één computer' }).click();
+    await expect(page.getByRole('button', { name: 'Start Spel' })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'gameroom local');
+
+    // Toss-scherm
+    await page.getByRole('button', { name: 'Start Spel' }).click();
+    await expect(page.getByRole('button', { name: 'Gooi Dobbelstenen' })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'gameroom toss');
+  });
+
+  test(`tap targets >=44px in gameroom online panel (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/?test=1&start_gameroom=1', { waitUntil: 'load' });
+
+    await page.getByRole('button', { name: 'Speel online' }).click();
+    await expect(page.getByRole('button', { name: 'Host Game' })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'gameroom online');
+  });
+
+  test(`tap targets >=44px in game + leave dialog (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/?test=1&start_pva=1', { waitUntil: 'load' });
+
+    await expect(page.getByRole('button', { name: /Gooi Dobbelstenen/ })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'game');
+
+    await page.getByRole('button', { name: /Verlaat spel/i }).click();
+    await expect(page.getByRole('button', { name: 'Annuleren' })).toBeVisible();
+    await expectAllVisibleButtons44(page, 'game leave-dialog');
+  });
+
+  test(`tap targets >=44px on gameover (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/?test=1&start_gameover=1', { waitUntil: 'load' });
+
+    await expect(page.getByRole('button', { name: 'Neem Revanche' })).toBeVisible({ timeout: 10_000 });
+    await expectAllVisibleButtons44(page, 'gameover');
   });
 }

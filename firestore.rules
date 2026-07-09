@@ -1,0 +1,45 @@
+rules_version = '2';
+
+// Tric-Trac Firestore security rules.
+// Deploy: firebase deploy --only firestore:rules  (zie README)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /games/{gameId} {
+      // Alleen ingelogde spelers (Google of anoniem) kunnen games zien.
+      allow read: if request.auth != null;
+
+      // Een game aanmaken kan alleen als 'waiting' host-doc met de
+      // verplichte velden en zonder vooraf ingevulde tegenstander.
+      allow create: if request.auth != null
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.player1 is string
+        && request.resource.data.player2 == null
+        && request.resource.data.isPrivate is bool
+        && request.resource.data.createdAt is number;
+
+      // Updates: alleen door ingelogde spelers, met bewaakte overgangen:
+      // - player1 is onveranderlijk
+      // - player2 mag alleen gezet worden zolang die leeg is (join)
+      // - status volgt waiting -> playing -> cancelled (of blijft gelijk)
+      allow update: if request.auth != null
+        && request.resource.data.player1 == resource.data.player1
+        && (resource.data.player2 == null
+            || request.resource.data.player2 == resource.data.player2)
+        && (request.resource.data.status == resource.data.status
+            || (resource.data.status == 'waiting'
+                && request.resource.data.status in ['playing', 'cancelled'])
+            || (resource.data.status == 'playing'
+                && request.resource.data.status == 'cancelled'));
+
+      // Games worden nooit client-side verwijderd (opruimen kan later
+      // server-side met TTL of een scheduled function).
+      allow delete: if false;
+    }
+
+    // Alles buiten /games is dicht.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

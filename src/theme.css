@@ -1,0 +1,97 @@
+/* ─────────────────────────────────────────────────────────────
+   Tric-Trac design tokens + gedeelde componentklassen.
+   Eén bron voor kleuren, radius, schaduwen, fonts en knoppen —
+   ter vervanging van de drie losse "Supercell"-definities.
+   ───────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'Lilita One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/lilita-one-latin.woff2') format('woff2');
+}
+
+:root {
+  /* Kleuren */
+  --tt-brown-dark: #3e2723;
+  --tt-brown: #5d4433;
+  --tt-brown-soft: #8d6e63;
+  --tt-cream: #f9efd7;
+  --tt-cream-deep: #f0e0ba;
+  --tt-gold: #d4af37;
+  --tt-red: #c92a2a;
+  --tt-red-dark: #861616;
+  --tt-blue: #1e87d6;
+  --tt-blue-dark: #104e7d;
+  --tt-orange: #e38a04;
+  --tt-orange-dark: #b86200;
+
+  /* Typografie */
+  --tt-font-display: 'Lilita One', 'Impact', sans-serif;
+  --tt-font-body: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Vorm */
+  --tt-radius-sm: 8px;
+  --tt-radius: 12px;
+  --tt-radius-lg: 18px;
+
+  /* Schaduw */
+  --tt-shadow-card: 0 18px 48px rgba(38, 66, 102, 0.28);
+  --tt-shadow-btn: 0 6px 12px rgba(0, 0, 0, 0.3);
+
+  /* Maatvoering */
+  --tt-tap-min: 44px;
+}
+
+/* ─── Gedeelde knopbasis (Supercell-stijl) ─── */
+.btn {
+  min-height: var(--tt-tap-min);
+  min-width: var(--tt-tap-min);
+  padding: 0 clamp(14px, 2.4vw, 24px);
+  border-radius: var(--tt-radius);
+  color: #fff;
+  font-family: var(--tt-font-display);
+  font-weight: 400;
+  text-transform: uppercase;
+  font-size: clamp(13px, 2.2dvh, 18px);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
+  transition: transform 0.1s ease, filter 0.1s ease, box-shadow 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:hover {
+  filter: brightness(1.07);
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn--gold {
+  background: linear-gradient(180deg, #fbbc05 0%, var(--tt-orange) 100%);
+  border: 2px solid var(--tt-orange-dark);
+  box-shadow: 0 4px 0 var(--tt-orange-dark), var(--tt-shadow-btn);
+}
+
+.btn--blue {
+  background: linear-gradient(180deg, #5fc3fa 0%, var(--tt-blue) 100%);
+  border: 2px solid var(--tt-blue-dark);
+  box-shadow: 0 4px 0 var(--tt-blue-dark), var(--tt-shadow-btn);
+}
+
+.btn--red {
+  background: linear-gradient(180deg, #ff6b6b 0%, var(--tt-red) 100%);
+  border: 2px solid var(--tt-red-dark);
+  box-shadow: 0 4px 0 var(--tt-red-dark), var(--tt-shadow-btn);
+}
+
+.btn--block {
+  width: 100%;
+}

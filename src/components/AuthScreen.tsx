@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signInAnonymously, GoogleAuthProvider } from 'firebase/auth';
 import type { User } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth } from '../firebase';
 import './AuthScreen.css';
 
 interface AuthScreenProps {
@@ -31,13 +31,48 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
       setLoading(false);
     });
 
+    // Terugkomst van de mobiele redirect-flow: fouten zichtbaar maken
+    // (succes loopt vanzelf via onAuthStateChanged hierboven)
+    getRedirectResult(auth).catch((error) => {
+      console.error('Redirect-login mislukt', error);
+      setStatus('Inloggen is niet gelukt. Probeer het opnieuw.');
+      setLoading(false);
+    });
+
     return () => unsubscribe();
   }, [onAuthenticated]);
+
+  const handleGuestLogin = () => {
+    setLoading(true);
+    setStatus('');
+    signInAnonymously(auth)
+      .then((result) => {
+        onAuthenticated(result.user);
+      })
+      .catch((error) => {
+        console.error('Error signing in anonymously', error);
+        setStatus('Gastmodus is momenteel niet beschikbaar.');
+        setLoading(false);
+      });
+  };
 
   const handleGoogleLogin = () => {
     setLoading(true);
     setStatus('');
     const provider = new GoogleAuthProvider();
+
+    // Op mobiel is signInWithPopup onbetrouwbaar (iOS Safari blokkeert de
+    // terugweg); de redirect-flow met first-party authDomain werkt daar wel.
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      signInWithRedirect(auth, provider).catch((error) => {
+        console.error('Redirect-login starten mislukt', error);
+        setStatus('Er is een fout opgetreden bij het inloggen met Google.');
+        setLoading(false);
+      });
+      return; // de pagina navigeert weg
+    }
+
     signInWithPopup(auth, provider)
       .then((result) => {
         onAuthenticated(result.user);
@@ -74,6 +109,10 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
           Doorgaan met Google
         </button>
 
+        <button onClick={handleGuestLogin} style={styles.guestButton}>
+          Speel als gast
+        </button>
+
         {status && <div style={styles.status}>{status}</div>}
       </div>
     </div>
@@ -83,7 +122,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     width: '100vw',
-    height: '100vh',
+    height: '100dvh',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -91,7 +130,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: '"Inter", sans-serif',
   },
   card: {
-    padding: '28px',
+    padding: '14px 24px',
     borderRadius: '22px',
     boxShadow: '0 16px 40px rgba(0,0,0,0.22)',
     width: 'auto',
@@ -103,7 +142,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '20px',
+    gap: '8px',
   },
   loadingText: {
     color: '#5c3a21',
@@ -116,7 +155,8 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     gap: '12px',
     width: '100%',
-    padding: '14px 24px',
+    minHeight: '44px',
+    padding: '8px 24px',
     borderRadius: '12px',
     border: '2px solid rgba(0,0,0,0.1)',
     background: '#ffffff',
@@ -126,6 +166,18 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     transition: 'transform 0.2s, background 0.2s',
     boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+  },
+  guestButton: {
+    width: '100%',
+    minHeight: '44px',
+    padding: '4px 24px',
+    borderRadius: '12px',
+    border: '2px dashed rgba(0,0,0,0.25)',
+    background: 'transparent',
+    color: '#5c3a21',
+    fontWeight: 'bold',
+    fontSize: '15px',
+    cursor: 'pointer',
   },
   googleIcon: {
     width: '24px',

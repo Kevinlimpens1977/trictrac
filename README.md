@@ -1,73 +1,55 @@
-# React + TypeScript + Vite
+# Tric-Trac
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Digitale versie van het klassieke bordspel Tric-Trac: speel tegen de computer,
+lokaal met twee spelers op één scherm, of online tegen een vriend (Firebase).
 
-Currently, two official plugins are available:
+## Ontwikkelen
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev          # dev server (Vite)
+npm run build        # typecheck + productiebuild
+npx playwright test  # E2E-tests (5 browserprojecten)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Handige test-URL's (omzeilen login/menu):
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- `/?test=1` — ingelogd, hoofdmenu
+- `/?test=1&start_pva=1` — direct in een potje tegen de computer
+- `/?test=1&start_gameroom=1` — gameroom (lobby)
+- `/?test=1&start_gameover=1` — game-over-scherm
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+In het spel: **Ctrl+Z** toggle't dev-knoppen voor endgame-scenario's.
+
+## Architectuur
+
+- Spellogica: pure reducer (`src/engine/gameReducer.ts`) + engines voor zetten,
+  dobbelstenen en setup. UI raakt de regels nooit rechtstreeks aan.
+- Online pvp: de volledige `GameState` synct als JSON via het Firestore-document
+  `games/{gameId}` (`stateJson` + `lastUpdateId`).
+- Bordinteractie: hit-testing in image-space (976×509) met touch-slop;
+  de layoutcoördinaten staan in `src/constants/boardLayout.ts`.
+- Design tokens en gedeelde knopklassen: `src/theme.css`.
+
+## Security (Firestore)
+
+De rules staan in `firestore.rules` en zijn verplicht voor online spelen:
+alleen ingelogde spelers, `player1` onveranderlijk, join alleen op een lege
+`player2`-slot, en bewaakte statusovergangen (`waiting → playing → cancelled`).
+
+Deployen (eenmalig na elke rules-wijziging):
+
+```bash
+firebase deploy --only firestore:rules
 ```
+
+## Bekende beperkingen
+
+- **Dobbelstenen zijn client-side.** De actieve speler gooit lokaal
+  (`Math.random`) en synct het resultaat. Een technische speler kan dus in
+  theorie zijn eigen worpen vervalsen. Echte eerlijkheid vereist een
+  twee-partijen commit-reveal-protocol of een Cloud Function als scheidsrechter
+  — bewuste vervolgstap, zie `IMPLEMENTATIEPLAN-UX.md` §3.3.
+- **Bordafbeelding is opgeschaald.** `speelbord@2x.webp` is een
+  lanczos-upscale van de 976×509-bron; een echte high-res re-export van de
+  originele artwork blijft de aanbeveling voor maximale scherpte.

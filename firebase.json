@@ -3,5 +3,8 @@
     "providers": {
       "emailPassword": true
     }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
   }
 }

@@ -1,18 +1,23 @@
 import React, { useReducer, useEffect, useCallback, useRef, useState } from 'react';
-import { MenuScreen } from './components/MenuScreen';
 import { Gameroom } from './components/Gameroom';
 import { GameBoard } from './components/GameBoard';
 import { GameHUD } from './components/GameHUD';
 import { GameOverScreen } from './components/GameOverScreen';
 import { AuthScreen } from './components/AuthScreen';
+import { signOut } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { gameReducer, createInitialState } from './engine/gameReducer';
 import { startAILoop } from './engine/aiEngine';
 import { getBarCount, getEntryPoint, canLandOn, canBearOff, getValidMoves } from './engine/moveEngine';
 import { isPlayerSetupDone } from './engine/setupEngine';
 import type { GameMode, Player, GameState } from './types/GameState';
-import { db } from './firebase';
-import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { DiceRoller } from './components/DiceRoller';
+import { Coach } from './components/Coach';
+import { GameBanner } from './components/GameBanner';
+import { loadStats, recordGame, type PlayerStats } from './stats';
+import { playPieceMove, playHit, playBearOff, vibrate } from './audio/sound';
+import { db, auth } from './firebase';
+import { doc, getDoc, updateDoc, onSnapshot, deleteField } from 'firebase/firestore';
 import './App.css';
 
 function App() {
@@ -24,10 +29,17 @@ function App() {
   });
 
   const [state, dispatch] = useReducer(gameReducer, undefined, () => {
+    // Testhook: laad een voorbereide state (alleen met test=1&resume=1)
+    if (window.location.search.includes('test=1') && window.location.search.includes('resume=1')) {
+      try {
+        const raw = localStorage.getItem('tt-savegame');
+        if (raw) return { ...JSON.parse(raw), history: [] } as GameState;
+      } catch { /* val terug op normale start */ }
+    }
     if (window.location.search.includes('start_pva=1')) {
       return gameReducer(createInitialState(), { type: 'START_GAME', mode: 'pva' });
     }
-    if (window.location.search.includes('start_gameroom=1')) {
+    if (window.location.search.includes('start_gameroom=1') || window.location.search.includes('join=')) {
       return gameReducer(createInitialState(), { type: 'GO_TO_GAMEROOM' });
     }
     if (window.location.search.includes('start_gameover=1')) {
@@ -43,7 +55,10 @@ function App() {
 
   /* ─── Online PvP: Write state to Firestore ─── */
   useEffect(() => {
-    if (state.mode !== 'pvp' || !state.gameId || state.screen !== 'game') return;
+    if (state.mode !== 'pvp' || !state.gameId) return;
+    // Ook de allerlaatste state (gameover door winst of verlaten) moet
+    // gesynct worden, anders blijft de tegenstander eeuwig wachten.
+    if (state.screen !== 'game' && state.screen !== 'gameover') return;
     if (state.lastUpdateId === lastSyncedUpdateIdRef.current) return;
 
     // Serialize state as JSON string (avoids Firestore nested-array limitations)
@@ -62,6 +77,18 @@ function App() {
     const unsub = onSnapshot(doc(db, 'games', state.gameId), (snapshot) => {
       if (!snapshot.exists()) return;
       const raw = snapshot.data();
+
+      // Tegenstander heeft het spel geannuleerd zonder nieuwe state
+      // (vroeg verlaten of tab gesloten): behandel als verlaten
+      if (
+        raw.status === 'cancelled' &&
+        stateRef.current.screen === 'game' &&
+        (!raw.lastUpdateId || raw.lastUpdateId === stateRef.current.lastUpdateId)
+      ) {
+        const opp: Player = stateRef.current.localPlayer === 'B' ? 'W' : 'B';
+        dispatch({ type: 'ABANDON_GAME', player: opp });
+        return;
+      }
 
       // No stateJson yet (still in lobby phase) or same update
       if (!raw.stateJson || !raw.lastUpdateId) return;
@@ -85,46 +112,205 @@ function App() {
 
   const [exitingPieces, setExitingPieces] = useState<{ id: string, player: Player, point: number }[]>([]);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
-  const prevPointsRef = useRef(state.points);
+
+  /* ─── Persistentie: savegame (lokaal/pva) + reconnect (online) ─── */
+  type ResumeOffer =
+    | { kind: 'local' }
+    | { kind: 'online'; gameId: string; localPlayer: Player | null };
+  const [resumeOffer, setResumeOffer] = useState<ResumeOffer | null>(() => {
+    if (window.location.search.includes('test=1')) return null;
+    try {
+      const online = localStorage.getItem('tt-online-game');
+      if (online) {
+        const parsed = JSON.parse(online);
+        if (parsed?.gameId) return { kind: 'online', gameId: parsed.gameId, localPlayer: parsed.localPlayer ?? null };
+      }
+      if (localStorage.getItem('tt-savegame')) return { kind: 'local' };
+    } catch { /* corrupte opslag negeren */ }
+    return null;
+  });
+
+  const clearSaves = useCallback(() => {
+    try {
+      localStorage.removeItem('tt-savegame');
+      localStorage.removeItem('tt-online-game');
+    } catch { /* private mode */ }
+  }, []);
+
+  // Autosave: elke state-wijziging tijdens het spelen
+  useEffect(() => {
+    if (state.screen !== 'game') return;
+    try {
+      if (state.mode === 'pvp' && state.gameId) {
+        localStorage.setItem('tt-online-game', JSON.stringify({
+          gameId: state.gameId,
+          localPlayer: state.localPlayer ?? null,
+        }));
+      } else {
+        localStorage.setItem('tt-savegame', JSON.stringify({ ...state, history: [] }));
+      }
+    } catch { /* opslag vol/geblokkeerd is geen spelfout */ }
+  }, [state.lastUpdateId, state.screen, state.mode, state.gameId, state.localPlayer, state]);
+
+  // Opruimen zodra een potje echt klaar is (incl. de chat van dit potje)
+  useEffect(() => {
+    if (state.screen !== 'gameover') return;
+    clearSaves();
+    if (state.mode === 'pvp' && state.gameId) {
+      updateDoc(doc(db, 'games', state.gameId), { chat: deleteField() }).catch(() => {});
+    }
+  }, [state.screen, state.mode, state.gameId, clearSaves]);
+
+  /* ─── Carrière-statistieken per gebruiker ─── */
+  const [career, setCareer] = useState<PlayerStats | null>(() => (user ? loadStats(user.uid) : null));
+  const gameStartRef = useRef<number>(Date.now());
+  const recordedRef = useRef(false);
 
   useEffect(() => {
-    const prev = prevPointsRef.current;
-    const current = state.points;
-    let exitedPoint = -1;
-    let playerExited: Player | null = null;
+    if (state.screen === 'game') {
+      gameStartRef.current = Date.now();
+      recordedRef.current = false;
+    }
+    if (state.screen === 'gameover' && state.winner && user && !recordedRef.current) {
+      recordedRef.current = true;
+      // Perspectief van deze gebruiker: pva = zwart; online = localPlayer;
+      // lokaal 2-spelers potje heeft geen eigen perspectief.
+      let me: Player | null = null;
+      if (state.mode === 'pva') me = 'B';
+      else if (state.gameId && state.localPlayer) me = state.localPlayer;
 
-    let totalPrev = 0;
-    let totalCurr = 0;
+      const updated = recordGame(user.uid, {
+        won: me ? state.winner === me : null,
+        doubles: me ? state.stats.doubles[me] : 0,
+        hits: me ? state.stats.hits[me] : 0,
+        durationMs: Date.now() - gameStartRef.current,
+      });
+      setCareer(updated);
+    }
+  }, [state.screen, state.winner, state.mode, state.gameId, state.localPlayer, state.stats, user]);
 
-    prev.forEach(p => totalPrev += p ? p.count : 0);
-    current.forEach(p => totalCurr += p ? p.count : 0);
-
-    if (totalCurr < totalPrev) {
-      for (let i = 1; i <= 24; i++) {
-        const p1 = prev[i];
-        const p2 = current[i];
-        if (p1 && (!p2 || p2.count < p1.count)) {
-          exitedPoint = i;
-          playerExited = p1.owner;
-          break;
-        }
+  const resumeLocal = useCallback(() => {
+    try {
+      const raw = localStorage.getItem('tt-savegame');
+      if (raw) {
+        const saved = JSON.parse(raw) as GameState;
+        dispatch({ type: 'SYNC_STATE', state: { ...saved, history: [] } });
       }
+    } catch {
+      clearSaves();
     }
+    setResumeOffer(null);
+  }, [clearSaves]);
 
-    if (exitedPoint !== -1 && playerExited) {
-      const newExiting = { id: Math.random().toString(), player: playerExited, point: exitedPoint };
-      setExitingPieces(prevEx => [...prevEx, newExiting]);
-      
+  const resumeOnline = useCallback(async (gameId: string, localPlayer: Player | null) => {
+    setResumeOffer(null);
+    try {
+      const snap = await getDoc(doc(db, 'games', gameId));
+      const data = snap.exists() ? snap.data() : null;
+      if (data?.stateJson && data.status === 'playing') {
+        const remote = JSON.parse(data.stateJson) as GameState;
+        dispatch({
+          type: 'SYNC_STATE',
+          state: { ...remote, history: [], localPlayer: localPlayer ?? undefined },
+        });
+        return;
+      }
+    } catch (e) {
+      console.error('[Reconnect] mislukt:', e);
+    }
+    clearSaves(); // potje bestaat niet meer
+  }, [clearSaves]);
+
+  const declineResume = useCallback(() => {
+    clearSaves();
+    setResumeOffer(null);
+  }, [clearSaves]);
+
+  /* Reageer op expliciete bord-events uit de reducer (geen state-diffing
+     meer: een hit kan zo nooit meer als bear-off worden gelezen). */
+  const lastEventSeqRef = useRef(0);
+  useEffect(() => {
+    const ev = state.lastEvent;
+    if (!ev) return;
+    if (ev.seq <= lastEventSeqRef.current) {
+      lastEventSeqRef.current = ev.seq; // undo: teller terugzetten, niet opnieuw afspelen
+      return;
+    }
+    lastEventSeqRef.current = ev.seq;
+
+    if (ev.type === 'move') {
+      playPieceMove();
+    } else if (ev.type === 'hit') {
+      playHit();
+      vibrate([40, 60, 40]);
+    } else if (ev.type === 'bearoff') {
+      playBearOff();
+      vibrate(60);
+      const exiting = { id: `${ev.seq}`, player: ev.player, point: ev.from };
+      setExitingPieces(prev => [...prev, exiting]);
       setTimeout(() => {
-        setExitingPieces(ex => ex.filter(p => p.id !== newExiting.id));
-      }, 1500); // Exiting animation duration
+        setExitingPieces(ex => ex.filter(pc => pc.id !== exiting.id));
+      }, 1500);
     }
-
-    prevPointsRef.current = current;
-  }, [state.points]);
+  }, [state.lastEvent]);
 
   const remainingStones = state.points.reduce((acc, p) => p && p.owner === state.turn ? acc + p.count : acc, 0);
   const isClimax = canBearOff(state, state.turn) && remainingStones <= 3 && remainingStones > 0;
+
+  /* Instelling: automatisch uitspelen (bear-off). Default aan. */
+  const [autoBearOff, setAutoBearOff] = useState(() => {
+    try { return localStorage.getItem('tt-autobearoff') !== '0'; } catch { return true; }
+  });
+  const autoBearOffRef = useRef(autoBearOff);
+  autoBearOffRef.current = autoBearOff;
+  const toggleAutoBearOff = useCallback(() => {
+    setAutoBearOff(prev => {
+      try { localStorage.setItem('tt-autobearoff', prev ? '0' : '1'); } catch { /* private mode */ }
+      return !prev;
+    });
+  }, []);
+
+  /* ─── Online turn-timer: 60s per beurt in pvp ───
+     Gebaseerd op een LOKAAL klok-anker per beurtwissel (immuun voor
+     klokverschil tussen apparaten). Reageert de actieve speler niet
+     (tab dicht, slaapstand), dan neemt de wachtende client de beurt
+     over na een korte gratieperiode — het spel kan nooit meer hangen. */
+  const TURN_SECONDS = (() => {
+    const t = Number(new URLSearchParams(window.location.search).get('turnsecs'));
+    return Number.isFinite(t) && t > 0 ? t : 60; // testhook
+  })();
+  const TAKEOVER_GRACE = Math.max(3, Math.round(TURN_SECONDS / 4));
+  const [turnRemaining, setTurnRemaining] = useState<number | null>(null);
+  const turnAnchorRef = useRef(Date.now());
+  useEffect(() => {
+    turnAnchorRef.current = Date.now();
+  }, [state.turn, state.turnStartedAt]);
+
+  useEffect(() => {
+    if (!(state.mode === 'pvp' && state.gameId && state.screen === 'game')) {
+      setTurnRemaining(null);
+      return;
+    }
+    const tick = () => {
+      const elapsed = (Date.now() - turnAnchorRef.current) / 1000;
+      const remain = Math.max(0, Math.ceil(TURN_SECONDS - elapsed));
+      setTurnRemaining(remain);
+
+      const iAmActive = state.localPlayer === state.turn;
+      if (iAmActive && remain === 0 && !state.isRolling) {
+        dispatch({ type: 'FORFEIT_TURN', reason: 'Tijd om! Beurt verloren.' });
+        return;
+      }
+      // Actieve speler reageert niet: wachtende client neemt de beurt over
+      if (!iAmActive && state.localPlayer && elapsed > TURN_SECONDS + TAKEOVER_GRACE) {
+        const opp = state.playerNames?.[state.turn] ?? 'Je tegenstander';
+        dispatch({ type: 'FORFEIT_TURN', reason: `${opp} reageerde niet binnen de tijd — jij bent aan de beurt.` });
+      }
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [state.mode, state.gameId, state.screen, state.turnStartedAt, state.turn, state.localPlayer, state.isRolling, TURN_SECONDS, TAKEOVER_GRACE]);
 
   /* ─── AI loop ─── */
   useEffect(() => {
@@ -160,8 +346,8 @@ function App() {
       return () => clearTimeout(timer);
     }
 
-    // Auto bear-off (Euforisch einde)
-    if (!isSetup && canBearOff(state, state.turn) && state.remainingDice.length > 0) {
+    // Auto bear-off (Euforisch einde) — alleen als de instelling aan staat
+    if (!isSetup && autoBearOff && canBearOff(state, state.turn) && state.remainingDice.length > 0) {
       const allMoves: { from: number, to: number }[] = [];
       
       for (let i = 1; i <= 24; i++) {
@@ -187,7 +373,7 @@ function App() {
         return () => clearTimeout(timer);
       }
     }
-  }, [state.validTos, state.isRolling, state.screen, state.turn, state.mode, state.remainingDice, state.points]);
+  }, [state.validTos, state.isRolling, state.screen, state.turn, state.mode, state.remainingDice, state.points, autoBearOff, isClimax, remainingStones]);
 
   /* ─── Roll Animation ─── */
   useEffect(() => {
@@ -199,18 +385,21 @@ function App() {
 
       const t = setTimeout(() => {
         dispatch({ type: 'END_ROLL_ANIMATION' });
-      }, 2000);
+      }, 1200);
       return () => clearTimeout(t);
     }
   }, [state.isRolling]);
 
   /* ─── Handlers ─── */
-  const handleStart = useCallback((mode: GameMode) => {
-    if (mode === 'pvp') {
-      dispatch({ type: 'GO_TO_GAMEROOM' });
-    } else {
-      dispatch({ type: 'START_GAME', mode });
-    }
+  const handleLogout = useCallback(() => {
+    signOut(auth).catch(() => { /* lokaal uitloggen volstaat */ });
+    clearSaves();
+    setUser(null);
+    dispatch({ type: 'RESET' });
+  }, [clearSaves]);
+
+  const handleStartComputer = useCallback(() => {
+    dispatch({ type: 'START_GAME', mode: 'pva' });
   }, []);
 
   const handleStartMatch = useCallback((mode: GameMode, playerNames?: { B: string, W: string }, gameId?: string, starter?: Player, localPlayer?: Player) => {
@@ -224,9 +413,15 @@ function App() {
 
   const handlePointClick = useCallback((point: number) => {
     const s = stateRef.current;
-    
+
     // Prevent interaction if it's a multiplayer game and it's the opponent's turn
     if (s.mode === 'pvp' && s.localPlayer && s.localPlayer !== s.turn) {
+      return;
+    }
+
+    // Tap tijdens de worp-animatie = animatie overslaan
+    if (s.isRolling) {
+      dispatch({ type: 'END_ROLL_ANIMATION' });
       return;
     }
 
@@ -240,8 +435,16 @@ function App() {
 
     // Move phase
     if (!isSetup) {
-      if (canBearOff(s, s.turn)) {
-        // Bear-off is now fully automated via useEffect. Manual clicking is disabled here.
+      if (canBearOff(s, s.turn) && autoBearOffRef.current) {
+        // Automatisch uitspelen staat aan; de useEffect speelt de zetten
+        return;
+      }
+
+      // Tweede tik/dubbelklik op de geselecteerde steen = zet direct uitvoeren
+      // (sneller dan naar het groene bestemmingsvak reiken; bij het
+      // uitspelen is validTos [25] en is dit de handmatige bear-off)
+      if (s.selected === point && s.validTos.length === 1) {
+        dispatch({ type: 'MOVE_PIECE', from: point, to: s.validTos[0] });
         return;
       }
 
@@ -258,6 +461,12 @@ function App() {
 
   const handleBarClick = useCallback(() => {
     const s = stateRef.current;
+    if (s.isRolling) {
+      if (!(s.mode === 'pvp' && s.localPlayer && s.localPlayer !== s.turn)) {
+        dispatch({ type: 'END_ROLL_ANIMATION' });
+      }
+      return;
+    }
     if (s.phase !== 'move') return;
 
     // Prevent interaction if it's a multiplayer game and it's the opponent's turn
@@ -286,17 +495,53 @@ function App() {
 
   const confirmLeaveGame = useCallback(() => {
     setShowLeaveConfirm(false);
-    dispatch({ type: 'ABANDON_GAME', player: state.turn });
-  }, [state.turn]);
+    const s = stateRef.current;
+    // Online: markeer het spel als geannuleerd zodat de tegenstander het
+    // direct ziet, ook als de gameover-state-sync hem niet zou bereiken
+    if (s.mode === 'pvp' && s.gameId) {
+      updateDoc(doc(db, 'games', s.gameId), { status: 'cancelled' }).catch(() => {});
+    }
+    clearSaves();
+    // De verlater ben IK (online = mijn kleur); alleen bij lokaal spelen op
+    // één scherm is 'wie aan de beurt is' de beste benadering
+    const leaver: Player = (s.mode === 'pvp' && s.gameId && s.localPlayer) ? s.localPlayer : s.turn;
+    dispatch({ type: 'ABANDON_GAME', player: leaver });
+  }, [clearSaves]);
 
   /* ─── Keyboard Listeners ─── */
   const [showDevTools, setShowDevTools] = useState(false);
+  const introSeen = () => {
+    try { return sessionStorage.getItem('tt-intro-seen') === '1'; } catch { return false; }
+  };
   const [introPhase, setIntroPhase] = useState<'intro' | 'game'>(() => {
-    return window.location.search.includes('start_pva=1') || window.location.search.includes('test=1') ? 'game' : 'intro';
+    if (window.location.search.includes('start_pva=1') || window.location.search.includes('test=1')) return 'game';
+    return introSeen() ? 'game' : 'intro';
   });
+  const finishIntro = useCallback(() => {
+    try { sessionStorage.setItem('tt-intro-seen', '1'); } catch { /* private mode */ }
+    setIntroPhase('game');
+  }, []);
   const [isMobilePortrait, setIsMobilePortrait] = useState(() => {
     return window.matchMedia('(max-width: 700px) and (orientation: portrait)').matches;
   });
+  const [showRotateHint, setShowRotateHint] = useState(() => {
+    try { return sessionStorage.getItem('tt-rotate-hint') !== '1'; } catch { return true; }
+  });
+  const dismissRotateHint = useCallback(() => {
+    setShowRotateHint(false);
+    try { sessionStorage.setItem('tt-rotate-hint', '1'); } catch { /* private mode */ }
+  }, []);
+
+  const rotateHintBanner = (floating: boolean) => (
+    isMobilePortrait && showRotateHint ? (
+      <div className={`rotate-hint${floating ? ' rotate-hint--floating' : ''}`} role="status">
+        <span>🔄 Draai je telefoon horizontaal voor een groter bord</span>
+        <button className="rotate-hint-close" onClick={dismissRotateHint} aria-label="Sluit tip">
+          ✕
+        </button>
+      </div>
+    ) : null
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -308,8 +553,67 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  /* ─── Keyboard-bediening van het bord (toegankelijkheid) ───
+     ←/→ loopt door eigen punten (of geldige doelen bij selectie),
+     Enter bevestigt, Esc deselecteert, R gooit, U neemt terug. */
+  const [kbFocus, setKbFocus] = useState<number | null>(null);
+
   useEffect(() => {
-    if (state.screen === 'menu') {
+    if (state.screen !== 'game') return;
+
+    const onKey = (e: KeyboardEvent) => {
+      const s = stateRef.current;
+      if (s.mode === 'pvp' && s.localPlayer && s.localPlayer !== s.turn) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      if (e.key === 'r' || e.key === 'R') {
+        if (!s.rawDice && !s.isRolling) dispatch({ type: 'ROLL_DICE' });
+        return;
+      }
+      if (e.key === 'u' || e.key === 'U') {
+        if (s.history.length > 0) dispatch({ type: 'UNDO', stepsBack: 1 });
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (s.selected !== null) dispatch({ type: 'SELECT_POINT', point: -1 });
+        setKbFocus(null);
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        const candidates = s.selected !== null && s.validTos.length > 0
+          ? [...s.validTos].filter(p => p >= 1 && p <= 24).sort((a, b) => a - b)
+          : Array.from({ length: 24 }, (_, i) => i + 1).filter(i => s.points[i]?.owner === s.turn);
+        if (candidates.length === 0) return;
+        setKbFocus(prev => {
+          const idx = prev !== null ? candidates.indexOf(prev) : -1;
+          return candidates[(idx + dir + candidates.length) % candidates.length];
+        });
+        return;
+      }
+      if (e.key === 'Enter' && kbFocus !== null) {
+        handlePointClick(kbFocus);
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [state.screen, kbFocus, handlePointClick]);
+
+  // Esc sluit de verlaat-dialoog
+  useEffect(() => {
+    if (!showLeaveConfirm) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowLeaveConfirm(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showLeaveConfirm]);
+
+  useEffect(() => {
+    if (state.screen === 'menu' && !introSeen()) {
       setIntroPhase('intro');
     }
   }, [state.screen]);
@@ -326,16 +630,46 @@ function App() {
     return <AuthScreen onAuthenticated={(user) => setUser(user)} />;
   }
 
-  if (state.screen === 'menu') {
-    return <MenuScreen onStart={handleStart} />;
-  }
-
-  if (state.screen === 'gameroom') {
+  // 'menu' bestaat alleen nog in oude savegames/synced states: ook dan de hub
+  if (state.screen === 'gameroom' || state.screen === 'menu') {
+    const joinParam = new URLSearchParams(window.location.search).get('join');
     return (
-      <Gameroom
-        onBack={() => dispatch({ type: 'RESET' })}
-        onStartMatch={handleStartMatch}
-      />
+      <>
+        <Gameroom
+          onBack={() => dispatch({ type: 'RESET' })}
+          onStartMatch={handleStartMatch}
+          onStartComputer={handleStartComputer}
+          onLogout={handleLogout}
+          career={career}
+          initialJoinId={joinParam ?? undefined}
+        />
+        {rotateHintBanner(true)}
+        {resumeOffer && (
+          <div style={{ ...styles.modalOverlay, position: 'fixed' }}>
+            <div style={styles.modalContent}>
+              <h2 style={styles.modalTitle}>Potje hervatten?</h2>
+              <p style={styles.modalText}>
+                {resumeOffer.kind === 'online'
+                  ? `Je was nog verbonden met online potje ${resumeOffer.gameId}. Opnieuw verbinden?`
+                  : 'Er staat nog een onafgemaakt potje klaar. Wil je verdergaan waar je was gebleven?'}
+              </p>
+              <div style={styles.modalActions}>
+                <button style={styles.modalBtnCancel} onClick={declineResume}>
+                  Nieuw spel
+                </button>
+                <button
+                  style={{ ...styles.modalBtnConfirm, background: 'linear-gradient(135deg, #4caf50, #2e7d32)', border: '1px solid #1b5e20' }}
+                  onClick={() => resumeOffer.kind === 'online'
+                    ? resumeOnline(resumeOffer.gameId, resumeOffer.localPlayer)
+                    : resumeLocal()}
+                >
+                  Hervatten
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -350,6 +684,8 @@ function App() {
         </div>
       )}
 
+      {introPhase === 'game' && rotateHintBanner(false)}
+
       <div className="board-wrapper" style={styles.boardWrapper}>
         <GameBoard
           state={state}
@@ -357,36 +693,63 @@ function App() {
           onBarClick={introPhase === 'intro' ? () => {} : handleBarClick}
           exitingPieces={exitingPieces}
           isClimax={isClimax}
+          flightEvent={state.lastEvent}
+          focusPoint={kbFocus}
         >
           {introPhase === 'intro' && (
-             <video 
+            <div
+              onPointerUp={finishIntro}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                zIndex: 100,
+                cursor: 'pointer',
+              }}
+            >
+              <video
                 src="/afbeeldingen/bordopenen.mp4"
                 autoPlay
                 muted
                 playsInline
-                onEnded={() => setIntroPhase('game')}
+                onEnded={finishIntro}
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
                   width: '100%',
                   height: '100%',
-                  objectFit: 'fill',
-                  zIndex: 100,
+                  objectFit: 'cover',
                   pointerEvents: 'none',
                 }}
-             />
+              />
+              <button onClick={finishIntro} style={styles.skipIntroBtn} aria-label="Intro overslaan">
+                Overslaan ▸
+              </button>
+            </div>
           )}
+
+          {/* Worp-animatie op het bord (midden linkerhelft) */}
+          {introPhase === 'game' && (
+            <div className="board-dice-overlay">
+              <DiceRoller isRolling={state.isRolling} dice={state.rawDice} />
+            </div>
+          )}
+
+          {/* Bord-banners: beurtwissel + DUBBEL!/TRIC-TRAC! */}
+          {introPhase === 'game' && <GameBanner state={state} />}
 
           {/* Inject HUD over the right section of the board */}
           {introPhase === 'game' && !isMobilePortrait && (
-            <div className="board-hud-overlay" style={styles.hudOverlay}>
+            <div className="board-hud-overlay">
               <GameHUD
                 state={state}
                 localPlayer={state.localPlayer}
                 onRollDice={handleRollDice}
                 onUndo={(stepsBack) => dispatch({ type: 'UNDO', stepsBack })}
                 onLeaveGame={() => setShowLeaveConfirm(true)}
+                autoBearOff={autoBearOff}
+                onToggleAutoBearOff={toggleAutoBearOff}
+                turnRemaining={turnRemaining}
               />
             </div>
           )}
@@ -401,12 +764,18 @@ function App() {
             onRollDice={handleRollDice}
             onUndo={(stepsBack) => dispatch({ type: 'UNDO', stepsBack })}
             onLeaveGame={() => setShowLeaveConfirm(true)}
+            autoBearOff={autoBearOff}
+            onToggleAutoBearOff={toggleAutoBearOff}
+            turnRemaining={turnRemaining}
           />
         </div>
       )}
       
+      {introPhase === 'game' && state.screen === 'game' && <Coach state={state} />}
+
+
       {state.screen === 'gameover' && state.winner && (
-        <GameOverScreen winner={state.winner} stats={state.stats} onRestart={handleRestart} />
+        <GameOverScreen winner={state.winner} stats={state.stats} onRestart={handleRestart} career={career} />
       )}
 
       {showLeaveConfirm && (
@@ -415,8 +784,9 @@ function App() {
             <h2 style={styles.modalTitle}>Spel Verlaten</h2>
             <p style={styles.modalText}>Weet je zeker dat je het spel wilt verlaten? Je keert terug naar het beginscherm en de huidige voortgang gaat verloren.</p>
             <div style={styles.modalActions}>
-              <button 
-                style={styles.modalBtnCancel} 
+              <button
+                style={styles.modalBtnCancel}
+                autoFocus
                 onClick={() => setShowLeaveConfirm(false)}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
@@ -448,7 +818,7 @@ function App() {
 const styles: Record<string, React.CSSProperties> = {
   gameContainer: {
     width: '100vw',
-    height: '100vh',
+    height: '100dvh',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -466,17 +836,21 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hudOverlay: {
+  skipIntroBtn: {
     position: 'absolute',
-    /* Below SPELRESULTAAT header: x 643-905 of 976, y ~145-440 of 509 */
-    left: '66%',
-    top: '28%',
-    width: '26.5%',
-    height: '58%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    pointerEvents: 'auto',
+    right: '3%',
+    bottom: '4%',
+    minHeight: '44px',
+    minWidth: '44px',
+    padding: '10px 20px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255,255,255,0.5)',
+    background: 'rgba(0,0,0,0.55)',
+    color: '#fff',
+    fontSize: '14px',
+    fontWeight: 700,
+    cursor: 'pointer',
+    backdropFilter: 'blur(3px)',
   },
   devPanel: {
     position: 'absolute',
@@ -538,6 +912,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '16px',
   },
   modalBtnCancel: {
+    minHeight: '44px',
     padding: '10px 20px',
     background: 'transparent',
     border: '1px solid rgba(255,255,255,0.2)',
@@ -549,6 +924,7 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'all 0.2s',
   },
   modalBtnConfirm: {
+    minHeight: '44px',
     padding: '10px 20px',
     background: 'linear-gradient(135deg, #dc3545, #a71d2a)',
     border: '1px solid #7a151f',

@@ -17,6 +17,8 @@ import {
   switchTurn,
   checkWinner,
   getBarCount,
+  getHomeRange,
+  canBearOff,
   resolveBarEntry,
   getValidMoves,
   executeMove,
@@ -30,7 +32,7 @@ export function createInitialState(): GameState {
   const points: (GameState['points'][number])[] = new Array(25).fill(null);
 
   return {
-    screen: 'menu',
+    screen: 'gameroom',
     mode: 'pvp',
     playerNames: { B: 'Speler 1', W: 'Speler 2' },
     gameId: null,
@@ -51,6 +53,8 @@ export function createInitialState(): GameState {
     validTos: [],
     winner: null,
     msg: 'Welkom bij Tric-Trac!',
+    lastEvent: null,
+    turnStartedAt: Date.now(),
     history: [],
     isRolling: false,
     stats: {
@@ -85,6 +89,7 @@ function nextTurn(state: GameState): GameState {
     validTos: [],
     history: [],
     isRolling: false,
+    turnStartedAt: Date.now(),
     msg: `${playerName(next)} is aan de beurt. Gooi de dobbelstenen.`,
   };
 }
@@ -101,6 +106,7 @@ function handleEndOfActions(state: GameState): GameState {
         remainingDice: [],
         selected: null,
         validTos: [],
+        turnStartedAt: Date.now(), // verse beurtklok voor de bonusworp
         msg: `Actie voltooid! ${playerName(state.turn)} mag nogmaals gooien (Dubbel of Tric-Trac).`,
       };
     }
@@ -113,7 +119,9 @@ function handleEndOfActions(state: GameState): GameState {
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   if (action.type === 'SYNC_STATE') {
-    return { ...action.state, localPlayer: state.localPlayer };
+    // Huidige localPlayer wint (normale pvp-sync); bij een reconnect vanuit
+    // het menu is die nog leeg en nemen we hem uit de herstelde state.
+    return { ...action.state, localPlayer: state.localPlayer ?? action.state.localPlayer };
   }
 
   const newState = baseGameReducer(state, action);
@@ -157,7 +165,6 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
       } else {
         return {
           ...createInitialState(),
-          screen: 'menu',
           msg: `${playerName(abandoner)} heeft het spel verlaten. Het spel is afgebroken.`,
         };
       }
@@ -203,6 +210,9 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'END_ROLL_ANIMATION': {
+      // Guard tegen dubbel dispatchen (skip-tap + de reguliere timeout)
+      if (!state.isRolling) return state;
+
       const newState = { ...state, isRolling: false };
       const autoSelect = state.diceSets.length === 1;
 
@@ -305,11 +315,16 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
 
       const moves = getValidMoves(state, action.point, state.remainingDice);
       if (moves.length === 0) {
+        // Specifieke uitleg voor de eindvak-regel: binnen = vast
+        const [homeStart, homeEnd] = getHomeRange(player);
+        const frozenInHome = action.point >= homeStart && action.point <= homeEnd && !canBearOff(state, player);
         return {
           ...state,
           selected: action.point,
           validTos: [],
-          msg: `Geen geldige zetten vanaf punt ${action.point}.`,
+          msg: frozenInHome
+            ? 'Deze steen staat in je eindvak en staat vast tot het uitspelen.'
+            : `Geen geldige zetten vanaf punt ${action.point}.`,
         };
       }
 
@@ -326,6 +341,9 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
       if (action.from !== 0 && action.to !== 25 && state.selected === null) return state;
 
       const player = state.turn;
+      // Vóór de zet vaststellen of dit een hit wordt (voor lastEvent)
+      const targetBefore = action.to !== 25 ? state.points[action.to] : null;
+      const isHitMove = targetBefore !== null && targetBefore.owner !== player;
       let dieUsed: number = -1;
 
       if (action.from === 0) {
@@ -380,7 +398,19 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
         };
       }
       
-      newState = { ...newState, selected: null, validTos: [], history: [...state.history, historyState] };
+      newState = {
+        ...newState,
+        selected: null,
+        validTos: [],
+        history: [...state.history, historyState],
+        lastEvent: {
+          type: (action.to === 25 ? 'bearoff' : (isHitMove ? 'hit' : 'move')) as 'move' | 'hit' | 'bearoff',
+          from: action.from,
+          to: action.to,
+          player,
+          seq: (state.lastEvent?.seq ?? 0) + 1,
+        },
+      };
 
       const winner = checkWinner(newState);
       if (winner) {
@@ -392,16 +422,36 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
         };
       }
 
-      if (newState.remainingDice.length === 0 || !hasAnyValidMove(newState)) {
-        if (newState.remainingDice.length === 0) {
-          return handleEndOfActions(newState);
-        } else {
+      if (newState.remainingDice.length === 0) {
+        return handleEndOfActions(newState);
+      }
+
+      // Nog stenen op de bar? Dan is de volgende dobbelsteen VERPLICHT voor
+      // herplaatsing (lopen mag pas als alles weer op het bord staat). Kan
+      // de steen niet geplaatst worden, dan is de beurt voorbij.
+      if (getBarCount(newState, player) > 0) {
+        const barResult = resolveBarEntry(newState, newState.remainingDice);
+        if (barResult.forfeited) {
           return {
             ...newState,
             ...nextTurn(newState),
-            msg: 'Geen zetten meer mogelijk met de resterende dobbelstenen. Beurt voorbij.',
+            msg: barResult.forfeitReason || 'Beurt verloren door geblokkeerde bar!',
           };
         }
+        const barLeft = getBarCount(newState, player);
+        return {
+          ...newState,
+          validTos: [barResult.entryPoint],
+          msg: `Nog ${barLeft} ${barLeft === 1 ? 'steen' : 'stenen'} op de bar. Speel eerst naar punt ${barResult.entryPoint}.`,
+        };
+      }
+
+      if (!hasAnyValidMove(newState)) {
+        return {
+          ...newState,
+          ...nextTurn(newState),
+          msg: 'Geen zetten meer mogelijk met de resterende dobbelstenen. Beurt voorbij.',
+        };
       }
 
       return {
@@ -442,7 +492,6 @@ function baseGameReducer(state: GameState, action: GameAction): GameState {
       } else {
         return {
           ...createInitialState(),
-          screen: 'menu', // or keep it simple
           msg: 'Spel afgebroken. Er waren niet genoeg stenen geplaatst.',
         };
       }
