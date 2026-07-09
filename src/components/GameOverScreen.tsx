@@ -116,17 +116,25 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, stats, o
 
         /* 3: titel, subtitel, statistieken, knop */
         .from(q('.go-letter'), { rotationX: -95, y: 26, opacity: 0, transformOrigin: '50% 100%', stagger: 0.05, duration: 0.55, ease: 'back.out(1.8)' }, 'impact+=1.0')
-        .from(q('.go-sub'), { opacity: 0, y: 12, duration: 0.4 }, '>-0.1')
-        .from(q('.go-stat'), { x: -46, opacity: 0, stagger: 0.14, duration: 0.5 }, '>-0.05')
-        .to(counters, {
-          d: doublesVal,
-          h: hitsVal,
-          duration: 0.9,
-          ease: 'power1.out',
-          onUpdate: () => setCounters(Math.round(counters.d), Math.round(counters.h)),
-        }, '<+0.15')
-        .from(q('.go-career'), { opacity: 0, y: 10, duration: 0.4 }, '>-0.3')
-        .from(q('.go-divider'), { scaleX: 0, duration: 0.5 }, '<')
+        .from(q('.go-sub'), { opacity: 0, y: 12, duration: 0.4 }, '>-0.1');
+
+      /* Statistiek- en carrièreregels bestaan niet altijd (gast of nieuw
+         profiel) — alleen tweens toevoegen voor elementen die er echt zijn,
+         anders logt GSAP "target not found" */
+      if ((q('.go-stat') as HTMLElement[]).length) {
+        tl.from(q('.go-stat'), { x: -46, opacity: 0, stagger: 0.14, duration: 0.5 }, '>-0.05')
+          .to(counters, {
+            d: doublesVal,
+            h: hitsVal,
+            duration: 0.9,
+            ease: 'power1.out',
+            onUpdate: () => setCounters(Math.round(counters.d), Math.round(counters.h)),
+          }, '<+0.15');
+      }
+      if ((q('.go-career') as HTMLElement[]).length) {
+        tl.from(q('.go-career'), { opacity: 0, y: 10, duration: 0.4 }, '>-0.3');
+      }
+      tl.from(q('.go-divider'), { scaleX: 0, duration: 0.5 }, '<')
         .from(q('.go-btn'), { scale: 0.6, opacity: 0, duration: 0.55, ease: 'back.out(2.2)' }, '>-0.1')
         .call(() => setCounters(doublesVal, hitsVal));
     }, root);
