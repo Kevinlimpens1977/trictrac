@@ -30,6 +30,13 @@ interface GameBoardProps {
   children?: React.ReactNode;
 }
 
+/** Y-positie van bar-steen `index`. Zwart staat in de onderste helft van de
+    bar, wit gespiegeld in de bovenste helft; beide stapelen richting het
+    midden (y=254.5). De oude wit-formule (448+80+i*d = 528+) viel buiten de
+    976x509-viewBox, waardoor geslagen witte stenen onzichtbaar waren. */
+const getBarPieceY = (player: Player, index: number) =>
+  player === 'B' ? 368 - index * PIECE_DIAMETER : 141 + index * PIECE_DIAMETER;
+
 interface Flight {
   id: string;
   player: Player;
@@ -37,11 +44,13 @@ interface Flight {
   fy: number;
   tx: number;
   ty: number;
+  /** startvertraging in s (geslagen steen wacht tot de aanvaller landt) */
+  delay?: number;
 }
 
 /** Vliegende steen (GSAP): boogje met aparte grond-schaduw en een
     subtiele squash bij de landing — voelt fysiek i.p.v. glijdend. */
-const FlightPiece: React.FC<Flight> = ({ player, fx, fy, tx, ty }) => {
+const FlightPiece: React.FC<Flight> = ({ player, fx, fy, tx, ty, delay = 0 }) => {
   const pieceRef = useRef<SVGGElement>(null);
   const shadowRef = useRef<SVGCircleElement>(null);
 
@@ -61,6 +70,7 @@ const FlightPiece: React.FC<Flight> = ({ player, fx, fy, tx, ty }) => {
     const tween = gsap.to(o, {
       t: 1,
       duration: 0.32,
+      delay,
       ease: 'power1.inOut',
       onUpdate() {
         const t = o.t;
@@ -81,7 +91,7 @@ const FlightPiece: React.FC<Flight> = ({ player, fx, fy, tx, ty }) => {
       },
     });
     return () => { tween.kill(); };
-  }, [fx, fy, tx, ty]);
+  }, [fx, fy, tx, ty, delay]);
 
   return (
     <g>
@@ -250,36 +260,58 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
       const index = role === 'to' ? Math.max(count - 1, 0) : count; // verwijderde steen zat bovenop
       return { x: pt.x, y: getPieceY(pt.isTop, index, Math.max(count, index + 1)) };
     };
-    const barPos = (player: Player) => ({ x: BOARD_LAYOUT.bar.x, y: player === 'B' ? 360 : 440 });
+    // Stapelplek `index` op de bar — zelfde formule als de statische
+    // bar-rendering, zodat vluchten exact op de stapel landen/vertrekken
+    const barStackPos = (player: Player, index: number) => ({
+      x: BOARD_LAYOUT.bar.x,
+      y: getBarPieceY(player, index),
+    });
+    const barCountOf = (p: Player) => (p === 'B' ? state.barB : state.barW);
 
-    const from = ev.from === 0 ? barPos(ev.player) : posOfPoint(ev.from, 'from');
+    // Heropzet vanaf de bar: de vertrokken steen lag bovenop (teller is al verlaagd)
+    const from = ev.from === 0
+      ? barStackPos(ev.player, barCountOf(ev.player))
+      : posOfPoint(ev.from, 'from');
     const to = posOfPoint(ev.to, 'to');
     if (!from || !to) return;
+
+    const MOVE_MS = 620;      // boog (320ms) + landing-squash + marge
+    const HIT_DELAY_S = 0.32; // geslagen steen vertrekt pas als de aanvaller landt
 
     const newFlights: Flight[] = [{
       id: `${ev.seq}-m`,
       player: ev.player,
       fx: from.x, fy: from.y, tx: to.x, ty: to.y,
     }];
+    const ttl: Record<string, number> = { [`${ev.seq}-m`]: MOVE_MS };
 
     if (ev.type === 'hit') {
       const opp: Player = ev.player === 'B' ? 'W' : 'B';
-      const oppBar = barPos(opp);
+      // Doel: de bovenste stapelplek (teller is al verhoogd)
+      const oppTop = barStackPos(opp, Math.max(barCountOf(opp) - 1, 0));
+      const hitId = `${ev.seq}-h`;
       newFlights.push({
-        id: `${ev.seq}-h`,
+        id: hitId,
         player: opp,
-        fx: to.x, fy: to.y, tx: oppBar.x, ty: oppBar.y,
+        fx: to.x, fy: to.y, tx: oppTop.x, ty: oppTop.y,
+        delay: HIT_DELAY_S,
       });
-      // Impact-burst op het contactpunt
+      ttl[hitId] = MOVE_MS + HIT_DELAY_S * 1000;
+      // Impact-burst op het moment dat de aanvaller landt
       const impact = { id: `${ev.seq}-i`, x: to.x, y: to.y };
-      setImpacts((arr) => [...arr, impact]);
-      setTimeout(() => setImpacts((arr) => arr.filter((i) => i.id !== impact.id)), 550);
+      setTimeout(() => {
+        setImpacts((arr) => [...arr, impact]);
+        setTimeout(() => setImpacts((arr) => arr.filter((i) => i.id !== impact.id)), 550);
+      }, HIT_DELAY_S * 1000);
     }
 
     setFlights((f) => [...f, ...newFlights]);
-    const ids = new Set(newFlights.map((f) => f.id));
-    const t = setTimeout(() => setFlights((f) => f.filter((x) => !ids.has(x.id))), 620);
-    return () => clearTimeout(t);
+    // Opruimen niet in de effect-cleanup: een volgende zet binnen de vluchttijd
+    // zou de timer annuleren en een hit-vlucht zou dan permanent een
+    // bar-steen blijven verbergen
+    for (const f of newFlights) {
+      setTimeout(() => setFlights((arr) => arr.filter((x) => x.id !== f.id)), ttl[f.id]);
+    }
   }, [flightEvent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ─── Selectie-feedback: pop bij selectie, hoofdschudden zonder zetten ─── */
@@ -530,15 +562,21 @@ export const GameBoard: React.FC<GameBoardProps> = ({ state, onPointClick, onBar
         })}
 
         {/* ── Bar pieces ── */}
-        {state.barB > 0 && Array.from({ length: state.barB }).map((_, i) => (
+        {/* Een geslagen steen die nog naar de bar vliegt telt even niet mee;
+            de statische steen verschijnt pas als de vlucht geland is */}
+        {Array.from({
+          length: Math.max(0, state.barB - flights.filter((f) => f.player === 'B' && f.id.endsWith('-h')).length),
+        }).map((_, i) => (
           <circle key={`barB-${i}`}
-            cx={layout.bar.x} cy={448 - 80 - i * PIECE_DIAMETER}
+            cx={layout.bar.x} cy={getBarPieceY('B', i)}
             r={PIECE_RADIUS - 2}
             fill="url(#pieceB)" stroke="#777" strokeWidth={4} />
         ))}
-        {state.barW > 0 && Array.from({ length: state.barW }).map((_, i) => (
+        {Array.from({
+          length: Math.max(0, state.barW - flights.filter((f) => f.player === 'W' && f.id.endsWith('-h')).length),
+        }).map((_, i) => (
           <circle key={`barW-${i}`}
-            cx={layout.bar.x} cy={448 + 80 + i * PIECE_DIAMETER}
+            cx={layout.bar.x} cy={getBarPieceY('W', i)}
             r={PIECE_RADIUS - 2}
             fill="url(#pieceW)" stroke="#c4b99a" strokeWidth={4} />
         ))}
